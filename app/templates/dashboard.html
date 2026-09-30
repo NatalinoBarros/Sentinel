@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sentinel</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  
+  <!-- Tailwind CSS com suporte a Dark Mode via classe -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            slate: {
+              850: '#151f32',
+              950: '#070b14',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Prevenção de Flash de Tema (FOUC) -->
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem('sentinel_theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    })();
+  </script>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    code, pre, .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    [x-cloak] { display: none !important; }
+
+    /* Badges de Status - Light Mode */
+    .badge-SUCCESS { background-color: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+    .badge-RUNNING { background-color: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+    .badge-FAILED  { background-color: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    .badge-MISSED  { background-color: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+    .badge-TIMEOUT { background-color: #fdf2f8; color: #9d174d; border: 1px solid #fbcfe8; }
+    .badge-PENDING { background-color: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
+
+    /* Badges de Status - Dark Mode */
+    .dark .badge-SUCCESS { background-color: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); }
+    .dark .badge-RUNNING { background-color: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.35); }
+    .dark .badge-FAILED  { background-color: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
+    .dark .badge-MISSED  { background-color: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
+    .dark .badge-TIMEOUT { background-color: rgba(219, 39, 119, 0.15); color: #f472b6; border: 1px solid rgba(219, 39, 119, 0.35); }
+    .dark .badge-PENDING { background-color: rgba(148, 163, 184, 0.15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3); }
+
+    /* Cards das automações: a cor comunica o estado sem esconder o conteúdo */
+    .job-card {
+      --status-color: #64748b;
+      --status-soft: rgba(100, 116, 139, 0.08);
+      position: relative;
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid var(--status-color);
+      background: linear-gradient(145deg, var(--status-soft), transparent 42%), #ffffff;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+    }
+    .job-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(15, 23, 42, 0.09); }
+    .job-card.status-SUCCESS { --status-color: #10b981; --status-soft: rgba(16, 185, 129, 0.10); }
+    .job-card.status-RUNNING { --status-color: #3b82f6; --status-soft: rgba(59, 130, 246, 0.10); }
+    .job-card.status-FAILED { --status-color: #ef4444; --status-soft: rgba(239, 68, 68, 0.10); }
+    .job-card.status-TIMEOUT { --status-color: #db2777; --status-soft: rgba(219, 39, 119, 0.10); }
+    .job-card.status-MISSED { --status-color: #f59e0b; --status-soft: rgba(245, 158, 11, 0.11); }
+    .job-card.status-PENDING { --status-color: #94a3b8; --status-soft: rgba(148, 163, 184, 0.09); }
+    .job-card .status-icon { color: var(--status-color); background: var(--status-soft); }
+    .dark .job-card {
+      border-color: #1e293b;
+      border-left-color: var(--status-color);
+      background: linear-gradient(145deg, var(--status-soft), transparent 45%), #0f172a;
+    }
+    .dark .job-card:hover { box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28); border-color: #334155; border-left-color: var(--status-color); }
+    .job-card.is-collapsed { min-height: 0; }
+    .job-card.is-collapsed .job-card-details,
+    .job-card.is-collapsed .job-card-footer { display: none; }
+    .job-card.is-expanded .job-card-next-compact { display: none; }
+    .job-card-title {
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+    }
+    .job-card .expand-chevron { transition: transform 180ms ease; }
+    .job-card.is-expanded .expand-chevron { transform: rotate(180deg); }
+    #jobsCardsGrid.jobs-list-mode { grid-template-columns: minmax(0, 1fr); }
+
+    /* Visualização em lista usa os mesmos cards em uma composição horizontal */
+    @media (min-width: 1024px) {
+      #jobsCardsGrid.jobs-list-mode { display: block; }
+      #jobsCardsGrid.jobs-list-mode .job-card {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(230px, 1fr) minmax(520px, 2.2fr) auto;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 12px;
+      }
+      #jobsCardsGrid.jobs-list-mode .job-card.is-collapsed { display: block; }
+      #jobsCardsGrid.jobs-list-mode .job-card:last-child { margin-bottom: 0; }
+      #jobsCardsGrid.jobs-list-mode .job-card-details {
+        margin-top: 0;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        align-items: center;
+      }
+      #jobsCardsGrid.jobs-list-mode .job-card-details .schedule-window,
+      #jobsCardsGrid.jobs-list-mode .job-card-details .duration-limit { grid-column: span 2; }
+      #jobsCardsGrid.jobs-list-mode .job-card-footer {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: 0;
+        justify-content: flex-end;
+      }
+      #jobsCardsGrid.jobs-list-mode .operational-label { display: none; }
+    }
+
+    /* Animação suave para modais */
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.96); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .modal-content {
+      animation: modalFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    .dark ::-webkit-scrollbar-thumb { background: #334155; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased transition-colors duration-200 selection:bg-indigo-500 selection:text-white">
+
+  <!-- Top Navigation Header -->
+  <header class="shrink-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 sticky top-0 z-30 transition-colors">
+    <div class="w-full px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      
+      <!-- Brand & Status -->
+      <div class="flex items-center gap-3.5">
+        
+        <!-- Logo Container (Imagem Customizada com Fallback) -->
+        <div class="relative flex items-center justify-center">
+          <img id="customLogoImg" src="/static/logo.png" alt="Logo"
+               onerror="handleLogoError(this)"
+               class="h-10 w-auto max-w-[150px] object-contain rounded-xl transition" />
+          
+          <!-- Fallback padrão (ícone com gradiente se nenhuma imagem existir) -->
+          <div id="fallbackLogo" class="hidden w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-400 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+            <i class="fa-solid fa-shield-heart text-xl"></i>
+          </div>
+        </div>
+
+        <div class="hidden sm:block">
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-bold tracking-tight text-slate-900 dark:text-white">Sentinel</h1>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              Online
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Monitor Central de Heartbeat e Falhas</p>
+        </div>
+      </div>
+
+      <!-- Actions & Theme Toggle -->
+      <div class="flex items-center gap-2 sm:gap-2.5">
+        
+        <!-- Botão Alternar Tema Claro / Escuro -->
+        <button onclick="toggleTheme()" id="themeToggleBtn"
+                title="Alternar entre tema Claro e Escuro"
+                class="inline-flex items-center justify-center w-9 h-9 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition border border-slate-200/80 dark:border-slate-700 shadow-sm active:scale-95">
+          <i class="fa-solid fa-moon text-sm dark:hidden"></i>
+          <i class="fa-solid fa-sun text-sm hidden dark:inline text-amber-400"></i>
+        </button>
+
+        <!-- Navegação principal ao lado do tema -->
+        <div class="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm" role="tablist" aria-label="Seções do dashboard">
+          <button id="jobsViewTab" type="button" onclick="showDashboardView('jobs')" role="tab" aria-selected="true" title="Automações"
+                  class="inline-flex items-center justify-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm transition">
+            <i class="fa-solid fa-robot"></i>
+            <span class="hidden lg:inline">Automações</span>
+            <span id="jobsViewCount" class="hidden xl:inline px-1.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/20 text-[10px]">0</span>
+          </button>
+          <button id="executionsViewTab" type="button" onclick="showDashboardView('executions')" role="tab" aria-selected="false" title="Últimas execuções"
+                  class="inline-flex items-center justify-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            <span class="hidden lg:inline">Últimas execuções</span>
+            <span id="executionsViewCount" class="hidden xl:inline px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-[10px]">0</span>
+          </button>
+        </div>
+
+        <!-- Botão Atualizar -->
+        <button onclick="fetchData()" id="refreshBtn"
+                class="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition border border-slate-200/80 dark:border-slate-700 shadow-sm active:scale-95">
+          <i class="fa-solid fa-rotate text-xs text-slate-500 dark:text-slate-400" id="refreshIcon"></i>
+          <span class="hidden sm:inline">Atualizar</span>
+        </button>
+
+        <!-- Botão Nova Automação -->
+        <button onclick="openModal('registerModal')"
+                class="inline-flex items-center gap-1.5 px-2.5 md:px-3.5 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-600/20 transition active:scale-95">
+          <i class="fa-solid fa-plus text-xs"></i>
+          <span class="hidden md:inline">Nova Automação</span>
+        </button>
+
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 min-h-0 w-full px-3 sm:px-6 lg:px-8 py-4 overflow-y-auto lg:overflow-hidden">
+
+    <div class="flex flex-col lg:flex-row gap-4 items-start lg:items-stretch lg:h-full min-h-0">
+      <aside class="w-full lg:w-52 xl:w-60 shrink-0 lg:h-full lg:overflow-y-auto">
+
+    <!-- Indicadores empilhados à esquerda -->
+    <div class="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-1 gap-3">
+      
+      <!-- Total -->
+      <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow transition">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total</span>
+          <span class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 text-xs">
+            <i class="fa-solid fa-layer-group"></i>
+          </span>
+        </div>
+        <div id="statTotal" class="text-3xl font-extrabold text-slate-900 dark:text-white mt-2">0</div>
+        <div class="text-[11px] text-slate-400 mt-1 font-medium">Automações mapeadas</div>
+      </div>
+
+      <!-- Saudáveis / OK -->
+      <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow transition">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Saudáveis</span>
+          <span class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 text-xs">
+            <i class="fa-solid fa-circle-check"></i>
+          </span>
+        </div>
+        <div id="statOk" class="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-2">0</div>
+        <div class="text-[11px] text-slate-400 mt-1 font-medium">Último ciclo em sucesso</div>
+      </div>
+
+      <!-- Em Execução -->
+      <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow transition">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Executando</span>
+          <span class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 text-xs">
+            <i class="fa-solid fa-spinner fa-spin text-xs"></i>
+          </span>
+        </div>
+        <div id="statRunning" class="text-3xl font-extrabold text-blue-600 dark:text-blue-400 mt-2">0</div>
+        <div class="text-[11px] text-slate-400 mt-1 font-medium">Processando agora</div>
+      </div>
+
+      <!-- Com Falha -->
+      <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow transition">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Com Falha</span>
+          <span class="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center text-rose-600 dark:text-rose-400 text-xs">
+            <i class="fa-solid fa-circle-xmark"></i>
+          </span>
+        </div>
+        <div id="statFailed" class="text-3xl font-extrabold text-rose-600 dark:text-rose-400 mt-2">0</div>
+        <div class="text-[11px] text-slate-400 mt-1 font-medium">Erros reportados</div>
+      </div>
+
+      <!-- Ausentes (Dead Man's Switch) -->
+      <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow transition col-span-2 sm:col-span-1 lg:col-span-1">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Ausentes</span>
+          <span class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-400 text-xs">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </span>
+        </div>
+        <div id="statMissed" class="text-3xl font-extrabold text-amber-600 dark:text-amber-400 mt-2">0</div>
+        <div class="text-[11px] text-slate-400 mt-1 font-medium">Não rodaram no prazo</div>
+      </div>
+
+    </div>
+      </aside>
+
+      <section class="min-w-0 min-h-0 flex-1 w-full lg:h-full">
+
+    <!-- Section: Automações Monitoradas -->
+    <div id="jobsView" role="tabpanel" class="h-full min-h-0 flex flex-col bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm transition-colors">
+      
+      <!-- Table Header & Filter Toolbar -->
+      <div class="px-6 py-4 border-b border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/60 dark:bg-slate-850/50">
+        <div class="flex items-center gap-2.5">
+          <div class="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs">
+            <i class="fa-solid fa-robot"></i>
+          </div>
+          <div>
+            <h2 class="text-sm font-bold text-slate-900 dark:text-white">Automações Monitoradas</h2>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Status e previsão de execução de cada rotina</p>
+          </div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2.5">
+          <!-- Search Box -->
+          <div class="relative w-full sm:w-64">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
+            <input type="text" id="filterInput" oninput="filterJobs()" placeholder="Buscar automação..."
+                   class="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition shadow-sm">
+          </div>
+          <div class="inline-flex p-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700" role="group" aria-label="Formato de visualização">
+            <button id="cardsLayoutBtn" type="button" onclick="setJobsLayout('cards')" title="Visualizar em cards"
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm transition">
+              <i class="fa-solid fa-grip"></i><span>Cards</span>
+            </button>
+            <button id="listLayoutBtn" type="button" onclick="setJobsLayout('list')" title="Visualizar em lista"
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold text-slate-500 dark:text-slate-400 transition">
+              <i class="fa-solid fa-list"></i><span>Lista</span>
+            </button>
+          </div>
+          <button id="expandAllCardsBtn" type="button" onclick="toggleAllJobCards()" title="Expandir todos os cards"
+                  class="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-300 transition shadow-sm">
+            <i id="expandAllCardsIcon" class="fa-solid fa-angles-down"></i>
+            <span id="expandAllCardsLabel" class="hidden xl:inline">Expandir todos</span>
+          </button>
+          <span class="text-[11px] text-slate-400 font-medium hidden sm:inline whitespace-nowrap" id="lastRefresh">Atualizado agora</span>
+        </div>
+      </div>
+
+      <!-- Grade responsiva de cards -->
+      <div class="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 bg-slate-50/40 dark:bg-slate-950/30">
+        <div id="jobsCardsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4" aria-live="polite">
+          <div class="md:col-span-2 xl:col-span-3 2xl:col-span-4 py-14 text-center text-slate-400 font-medium">
+            <i class="fa-solid fa-spinner fa-spin text-indigo-500 text-lg mb-2 block"></i>
+            Carregando automações monitoradas...
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Section: Histórico de Execuções e Erros -->
+    <div id="executionsView" role="tabpanel" class="hidden h-full min-h-0 flex flex-col bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm transition-colors">
+      
+      <div class="px-6 py-4 border-b border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/60 dark:bg-slate-850/50">
+        <div class="flex items-center gap-2.5">
+          <div class="w-7 h-7 rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center text-xs">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+          </div>
+          <div>
+            <h2 class="text-sm font-bold text-slate-900 dark:text-white">Histórico Recente de Execuções e Erros</h2>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Últimos pings recebidos e logs detalhados de exceção</p>
+          </div>
+        </div>
+        <div class="relative w-full sm:w-72">
+          <i class="fa-solid fa-filter absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
+          <input type="text" id="executionFilterInput" oninput="filterExecutions()" placeholder="Filtrar por Job ID..."
+                 class="w-full pl-8 pr-8 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition shadow-sm">
+          <button type="button" onclick="clearExecutionFilter()" title="Limpar filtro" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-white">
+            <i class="fa-solid fa-xmark text-xs"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex-1 min-h-[320px] overflow-auto">
+        <table class="w-full min-w-[1000px] text-left text-xs border-collapse">
+          <thead class="bg-slate-50/90 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 uppercase text-[11px] font-semibold tracking-wider border-b border-slate-200/80 dark:border-slate-800 sticky top-0 z-10">
+            <tr>
+              <th class="py-3 px-6">Status</th>
+              <th class="py-3 px-6">Job ID</th>
+              <th class="py-3 px-6">Início</th>
+              <th class="py-3 px-6">Fim</th>
+              <th class="py-3 px-6">Duração</th>
+              <th class="py-3 px-6">Diagnóstico / Erro</th>
+            </tr>
+          </thead>
+          <tbody id="executionsTableBody" class="divide-y divide-slate-100 dark:divide-slate-800/80 text-slate-700 dark:text-slate-300">
+            <tr>
+              <td colspan="6" class="py-10 text-center text-slate-400 font-medium">Nenhuma execução recente.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+      </section>
+    </div>
+
+  </main>
+
+  <!-- Modal: Cadastrar / Editar Automação -->
+  <div id="registerModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm hidden p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 shadow-2xl relative modal-content">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-bold">
+            <i class="fa-solid fa-sliders"></i>
+          </div>
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white" id="modalTitle">Cadastrar Nova Automação</h3>
+        </div>
+        <button onclick="closeModal('registerModal')" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="jobForm" onsubmit="saveJob(event)" class="space-y-4 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">ID Único do Job (sem espaços nem acentos):</label>
+          <input type="text" id="modalJobId" required placeholder="ex: Crypt_Lamina"
+                 class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 font-mono focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+          <p class="text-[10px] text-slate-400 mt-1">Deve ser o mesmo `job_id` passado no decorador <code>@monitor_job(...)</code>.</p>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Nome Amigável de Exibição:</label>
+          <input type="text" id="modalName" placeholder="ex: Criptografia de PDFs da Lâmina"
+                 class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Linguagem da rotina:</label>
+          <select id="modalLanguage"
+                  class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+            <option value="">Desconhecida / não identificada</option>
+            <option value="python">Python</option>
+            <option value="php">PHP</option>
+            <option value="other">Outra / BAT</option>
+          </select>
+          <span class="text-[10px] text-slate-400">Os clientes Python e PHP também identificam a linguagem automaticamente ao executar.</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Expressão Cron (opcional):</label>
+            <input type="text" id="modalCron" placeholder="0 9 * * *"
+                   class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 font-mono focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+            <span class="text-[10px] text-slate-400">Ex: <code>0 9 * * *</code> (todo dia às 9h)</span>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Intervalo (minutos):</label>
+            <input type="number" id="modalInterval" value="1440"
+                   class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 font-mono focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+            <span class="text-[10px] text-slate-400">1440 = 24 horas | 60 = 1 hora</span>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Janela diária de execução (opcional):</label>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <input type="time" id="modalWindowStart" aria-label="Início da janela de execução"
+                     class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 font-mono focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+              <span class="text-[10px] text-slate-400">Início (ex.: 07:00)</span>
+            </div>
+            <div>
+              <input type="time" id="modalWindowEnd" aria-label="Fim da janela de execução"
+                     class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 font-mono focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+              <span class="text-[10px] text-slate-400">Fim (ex.: 18:00)</span>
+            </div>
+          </div>
+          <p class="text-[10px] text-slate-400 mt-1">Fora desta janela o Dead Man's Switch fica em espera. Deixe ambos vazios para monitorar 24 horas.</p>
+          <div class="mt-3">
+            <span class="block font-semibold text-slate-600 dark:text-slate-300 mb-2">Dias da semana:</span>
+            <div class="grid grid-cols-4 gap-2 text-[11px]">
+              <label class="flex items-center gap-1.5"><input type="checkbox" class="execution-weekday" value="1" checked>Seg</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" class="execution-weekday" value="2" checked>Ter</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" class="execution-weekday" value="3" checked>Qua</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" class="execution-weekday" value="4" checked>Qui</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" class="execution-weekday" value="5" checked>Sex</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" class="execution-weekday" value="6" checked>Sáb</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" class="execution-weekday" value="7" checked>Dom</label>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tolerância para Ausência (minutos):</label>
+          <input type="number" id="modalGrace" value="15"
+                 class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 font-mono focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+          <span class="text-[10px] text-slate-400">Tempo após o horário previsto antes do Sentinel soar o alarme de ausência.</span>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tempo Limite Máximo de Execução (minutos):</label>
+          <input type="number" id="modalMaxDuration" value="60"
+                 class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 font-mono focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+          <span class="text-[10px] text-slate-400">Se a automação ficar executando além deste limite, o Sentinel alerta sobre travamento ou erro não tratado.</span>
+        </div>
+
+
+        <div class="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+          <button type="button" onclick="closeModal('registerModal')"
+                  class="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition">Cancelar</button>
+          <button type="submit"
+                  class="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 shadow-sm shadow-indigo-600/20 transition">Salvar Automação</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Visualizador de Traceback -->
+  <div id="errorModal" role="dialog" aria-modal="true" aria-labelledby="errorModalTitle" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm hidden p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl relative modal-content">
+      
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center text-xs font-bold">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </div>
+          <h3 id="errorModalTitle" class="text-sm font-bold text-slate-900 dark:text-white">Detalhes da Falha</h3>
+        </div>
+        <button onclick="closeModal('errorModal')" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div class="rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 px-3 py-2">
+            <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">Automação</span>
+            <span id="errorModalJob" class="block text-[11px] font-mono font-semibold text-slate-700 dark:text-slate-200 break-all"></span>
+          </div>
+          <div class="rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 px-3 py-2">
+            <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">Status</span>
+            <span id="errorModalStatus" class="block text-[11px] font-semibold text-slate-700 dark:text-slate-200"></span>
+          </div>
+          <div class="rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 px-3 py-2">
+            <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">Início</span>
+            <span id="errorModalStarted" class="block text-[11px] font-semibold text-slate-700 dark:text-slate-200"></span>
+          </div>
+        </div>
+
+        <div>
+          <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Mensagem de erro</span>
+          <pre id="errorModalMessage" class="text-xs text-rose-700 dark:text-rose-400 font-mono bg-rose-50/80 dark:bg-rose-950/40 p-3 rounded-xl border border-rose-200/80 dark:border-rose-900/60 whitespace-pre-wrap break-words max-h-40 overflow-auto"></pre>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pilha de execução (traceback)</span>
+            <button type="button" onclick="copyErrorDetails()" id="copyTbBtn" class="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 flex items-center gap-1">
+              <i class="fa-regular fa-copy"></i> Copiar erro
+            </button>
+          </div>
+          <pre id="errorModalTraceback" class="text-[11px] text-slate-100 bg-slate-900 dark:bg-slate-950 p-4 rounded-xl overflow-auto max-h-80 border border-slate-800 leading-relaxed font-mono whitespace-pre-wrap break-words"></pre>
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800 mt-4">
+        <button onclick="closeModal('errorModal')" class="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 text-xs transition">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Confirmação de Exclusão -->
+  <div id="deleteModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm hidden p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl relative modal-content text-center">
+      <div class="w-12 h-12 rounded-full bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center text-lg mx-auto mb-3">
+        <i class="fa-solid fa-trash-can"></i>
+      </div>
+      <h3 class="text-sm font-bold text-slate-900 dark:text-white mb-1">Remover Automação?</h3>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-5 leading-relaxed">
+        Tem certeza que deseja remover <strong id="deleteJobName" class="text-slate-800 dark:text-slate-200"></strong>? Todo o histórico de execuções deste job será excluído.
+      </p>
+      <div class="flex items-center justify-center gap-2">
+        <button onclick="closeModal('deleteModal')" class="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 text-xs transition">Cancelar</button>
+        <button id="confirmDeleteBtn" class="px-4 py-2 rounded-lg bg-rose-600 text-white font-semibold hover:bg-rose-700 text-xs transition shadow-sm shadow-rose-600/20">Sim, Remover</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript do Dashboard -->
+  <script>
+    let allJobs = [];
+    let allExecutions = [];
+    let expandAllMode = false;
+    const expandedJobIds = new Set();
+
+    const activeTabClasses = ['bg-white', 'dark:bg-slate-700', 'text-indigo-700', 'dark:text-indigo-300', 'shadow-sm'];
+    const inactiveTabClasses = ['text-slate-500', 'dark:text-slate-400'];
+
+    function setJobsLayout(layout, persist = true) {
+      const listMode = layout === 'list';
+      const grid = document.getElementById('jobsCardsGrid');
+      const cardsButton = document.getElementById('cardsLayoutBtn');
+      const listButton = document.getElementById('listLayoutBtn');
+      grid.classList.toggle('jobs-list-mode', listMode);
+
+      activeTabClasses.forEach(cls => {
+        cardsButton.classList.toggle(cls, !listMode);
+        listButton.classList.toggle(cls, listMode);
+      });
+      inactiveTabClasses.forEach(cls => {
+        cardsButton.classList.toggle(cls, listMode);
+        listButton.classList.toggle(cls, !listMode);
+      });
+      cardsButton.setAttribute('aria-pressed', String(!listMode));
+      listButton.setAttribute('aria-pressed', String(listMode));
+      if (persist) localStorage.setItem('sentinel_jobs_layout', listMode ? 'list' : 'cards');
+    }
+
+    function showDashboardView(view, persist = true) {
+      const showingJobs = view === 'jobs';
+      document.getElementById('jobsView').classList.toggle('hidden', !showingJobs);
+      document.getElementById('executionsView').classList.toggle('hidden', showingJobs);
+
+      const jobsTab = document.getElementById('jobsViewTab');
+      const executionsTab = document.getElementById('executionsViewTab');
+      activeTabClasses.forEach(cls => {
+        jobsTab.classList.toggle(cls, showingJobs);
+        executionsTab.classList.toggle(cls, !showingJobs);
+      });
+      inactiveTabClasses.forEach(cls => {
+        jobsTab.classList.toggle(cls, !showingJobs);
+        executionsTab.classList.toggle(cls, showingJobs);
+      });
+      jobsTab.setAttribute('aria-selected', String(showingJobs));
+      executionsTab.setAttribute('aria-selected', String(!showingJobs));
+      if (persist) localStorage.setItem('sentinel_dashboard_view', view);
+    }
+
+    function showJobExecutions(jobId) {
+      document.getElementById('executionFilterInput').value = jobId;
+      filterExecutions();
+      showDashboardView('executions');
+      document.getElementById('executionsView').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function clearExecutionFilter() {
+      document.getElementById('executionFilterInput').value = '';
+      filterExecutions();
+    }
+
+    function isJobCardExpanded(jobId) {
+      return expandAllMode || expandedJobIds.has(String(jobId));
+    }
+
+    function toggleJobCard(encodedJobId) {
+      const jobId = decodeURIComponent(encodedJobId);
+      const currentlyExpanded = isJobCardExpanded(jobId);
+      if (expandAllMode) {
+        allJobs.forEach(job => expandedJobIds.add(String(job.job_id)));
+        expandAllMode = false;
+      }
+      if (currentlyExpanded) expandedJobIds.delete(String(jobId));
+      else expandedJobIds.add(String(jobId));
+      filterJobs();
+    }
+
+    function toggleAllJobCards() {
+      const allExpanded = allJobs.length > 0 && allJobs.every(job => isJobCardExpanded(job.job_id));
+      expandedJobIds.clear();
+      expandAllMode = !allExpanded;
+      if (expandAllMode) allJobs.forEach(job => expandedJobIds.add(String(job.job_id)));
+      filterJobs();
+    }
+
+    function updateExpandAllControl() {
+      const button = document.getElementById('expandAllCardsBtn');
+      const label = document.getElementById('expandAllCardsLabel');
+      const icon = document.getElementById('expandAllCardsIcon');
+      if (!button || !label || !icon) return;
+      const allExpanded = allJobs.length > 0 && allJobs.every(job => isJobCardExpanded(job.job_id));
+      label.textContent = allExpanded ? 'Recolher todos' : 'Expandir todos';
+      icon.className = `fa-solid ${allExpanded ? 'fa-angles-up' : 'fa-angles-down'}`;
+      button.title = allExpanded ? 'Recolher todos os cards' : 'Expandir todos os cards';
+      button.setAttribute('aria-pressed', String(allExpanded));
+    }
+
+    // Gerenciamento de Tema Claro / Escuro
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('sentinel_theme', isDark ? 'dark' : 'light');
+    }
+
+    // Suporte a Logo Customizado com Fallback Inteligente
+    function handleLogoError(img) {
+      if (img.src.endsWith('/static/logo.png')) {
+        img.src = '/static/logo.svg';
+      } else if (img.src.endsWith('/static/logo.svg')) {
+        img.src = '/static/logo.jpg';
+      } else {
+        // Se nenhum arquivo de imagem existir, exibe o ícone de gradiente nativo
+        img.classList.add('hidden');
+        document.getElementById('fallbackLogo').classList.remove('hidden');
+      }
+    }
+
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    function formatTime(isoStr) {
+      if (!isoStr) return '<span class="text-slate-400">Nunca</span>';
+      try {
+        const d = new Date(isoStr);
+        return `<span class="font-medium">${d.toLocaleDateString('pt-BR')}</span> <span class="text-slate-400 text-[11px]">${d.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</span>`;
+      } catch (e) {
+        return isoStr;
+      }
+    }
+
+    function formatCompactTime(isoStr) {
+      if (!isoStr) return 'Não definida';
+      try {
+        const d = new Date(isoStr);
+        const date = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        return `${date} ${time}`;
+      } catch (e) {
+        return 'Não definida';
+      }
+    }
+
+    function formatPlainTime(isoStr) {
+      if (!isoStr) return 'Não informado';
+      const date = new Date(isoStr);
+      if (Number.isNaN(date.getTime())) return String(isoStr);
+      return `${date.toLocaleDateString('pt-BR')} ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+    }
+
+    function statusLabel(status) {
+      return {
+        SUCCESS: 'Saudável',
+        RUNNING: 'Executando',
+        FAILED: 'Com falha',
+        TIMEOUT: 'Travado / Timeout',
+        MISSED: 'Não rodou',
+        PENDING: 'Aguardando'
+      }[status] || status || 'Desconhecido';
+    }
+
+    function statusBadge(status) {
+      const config = {
+        'SUCCESS': { label: 'Saudável', dot: 'bg-emerald-500' },
+        'RUNNING': { label: 'Executando', dot: 'bg-blue-500 animate-pulse' },
+        'FAILED':  { label: 'Com Falha', dot: 'bg-rose-500' },
+        'TIMEOUT': { label: 'Travado / Timeout', dot: 'bg-rose-600 animate-pulse' },
+        'MISSED':  { label: 'Não Rodou', dot: 'bg-amber-500' },
+        'PENDING': { label: 'Aguardando', dot: 'bg-slate-400' }
+      };
+      const item = config[status] || { label: status, dot: 'bg-slate-400' };
+
+      return `
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold badge-${status}">
+          <span class="w-1.5 h-1.5 rounded-full ${item.dot}"></span>
+          ${item.label}
+        </span>
+      `;
+    }
+
+    function languageIcon(language) {
+      const normalized = (language || '').toLowerCase();
+      if (normalized === 'python') {
+        return `
+          <span title="Python" aria-label="Python"
+                class="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20">
+            <i class="fa-brands fa-python text-base text-blue-600 dark:text-sky-400"></i>
+          </span>`;
+      }
+      if (normalized === 'php') {
+        return `
+          <span title="PHP" aria-label="PHP"
+                class="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20">
+            <i class="fa-brands fa-php text-xl text-indigo-600 dark:text-indigo-300"></i>
+          </span>`;
+      }
+      if (normalized === 'other' || normalized === 'bat') {
+        return `
+          <span title="Arquivo BAT" aria-label="Arquivo BAT"
+                class="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-lg bg-cyan-50 dark:bg-cyan-500/10 border border-cyan-100 dark:border-cyan-500/20">
+            <i class="fa-brands fa-windows text-sm text-cyan-600 dark:text-cyan-300"></i>
+          </span>`;
+      }
+      return `
+        <span title="Linguagem desconhecida" aria-label="Linguagem desconhecida"
+              class="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400">
+          <i class="fa-solid fa-question text-xs"></i>
+        </span>`;
+    }
+
+    async function fetchData() {
+      const refreshIcon = document.getElementById('refreshIcon');
+      if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
+      try {
+        const [jobsRes, execRes] = await Promise.all([
+          fetch('/api/jobs'),
+          fetch('/api/executions?limit=100')
+        ]);
+        const jobs = await jobsRes.json();
+        const execs = await execRes.json();
+        allJobs = sortJobsByOperationalPriority(jobs);
+        allExecutions = execs;
+
+        // Atualiza Métricas
+        let ok = 0, running = 0, failed = 0, missed = 0;
+        jobs.forEach(j => {
+          if (j.last_status === 'SUCCESS') ok++;
+          else if (j.last_status === 'RUNNING') running++;
+          else if (j.last_status === 'FAILED' || j.last_status === 'TIMEOUT') failed++;
+          else if (j.last_status === 'MISSED') missed++;
+        });
+
+        document.getElementById('statTotal').innerText = jobs.length;
+        document.getElementById('statOk').innerText = ok;
+        document.getElementById('statRunning').innerText = running;
+        document.getElementById('statFailed').innerText = failed;
+        document.getElementById('statMissed').innerText = missed;
+        document.getElementById('jobsViewCount').innerText = jobs.length;
+        document.getElementById('executionsViewCount').innerText = execs.length;
+        document.getElementById('lastRefresh').innerText = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR');
+
+        renderJobsCards(allJobs);
+        filterExecutions();
+
+      } catch (err) {
+        console.error('Erro ao buscar dados:', err);
+      } finally {
+        if (refreshIcon) setTimeout(() => refreshIcon.classList.remove('fa-spin'), 400);
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function normalizedStatus(status) {
+      return ['SUCCESS', 'RUNNING', 'FAILED', 'TIMEOUT', 'MISSED', 'PENDING'].includes(status) ? status : 'PENDING';
+    }
+
+    function sortJobsByOperationalPriority(jobs) {
+      const priority = {
+        FAILED: 0,
+        TIMEOUT: 0,
+        MISSED: 1,
+        RUNNING: 2,
+        SUCCESS: 3,
+        PENDING: 4
+      };
+      return [...jobs].sort((a, b) => {
+        const statusDifference = priority[normalizedStatus(a.last_status)] - priority[normalizedStatus(b.last_status)];
+        if (statusDifference !== 0) return statusDifference;
+        return String(a.name || a.job_id || '').localeCompare(String(b.name || b.job_id || ''), 'pt-BR');
+      });
+    }
+
+    function renderJobsCards(jobsList) {
+      const grid = document.getElementById('jobsCardsGrid');
+      if (jobsList.length === 0) {
+        grid.innerHTML = `
+          <div class="md:col-span-2 xl:col-span-3 2xl:col-span-4 py-14 text-center text-slate-400">
+            <div class="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-2 text-base">
+              <i class="fa-solid fa-inbox"></i>
+            </div>
+            <p class="font-semibold text-slate-600 dark:text-slate-300">Nenhuma automação encontrada.</p>
+            <p class="text-[11px] mt-0.5">Ajuste a busca ou cadastre uma nova automação.</p>
+          </div>
+        `;
+        updateExpandAllControl();
+        return;
+      }
+
+      grid.innerHTML = jobsList.map(j => {
+        const status = normalizedStatus(j.last_status);
+        const expanded = isJobCardExpanded(j.job_id);
+        const days = (j.execution_weekdays || '1,2,3,4,5,6,7').split(',').map(Number);
+        const dayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+        const daysLabel = days.join(',') === '1,2,3,4,5' ? 'Seg–Sex' : days.map(day => dayNames[day - 1]).join(', ');
+        const encodedId = encodeURIComponent(j.job_id || '');
+        const frequency = j.schedule_cron
+          ? `<code class="text-[11px] text-slate-700 dark:text-slate-300">${escapeHtml(j.schedule_cron)}</code>`
+          : `<span class="font-semibold text-slate-700 dark:text-slate-200">A cada ${Number(j.expected_interval_minutes) || 0} min</span>`;
+        const windowText = j.execution_window_start && j.execution_window_end
+          ? `${escapeHtml(j.execution_window_start)}–${escapeHtml(j.execution_window_end)} · ${escapeHtml(daysLabel)}`
+          : 'Monitoramento contínuo';
+
+        return `
+          <article class="job-card status-${status} ${expanded ? 'is-expanded' : 'is-collapsed'} rounded-2xl p-3 flex flex-col ${expanded ? 'min-h-[300px]' : ''}">
+            <div class="job-card-header flex items-start gap-2.5">
+              <div class="flex items-start gap-2.5 min-w-0 flex-1">
+                ${languageIcon(j.language)}
+                <div class="min-w-0 flex-1">
+                  <h3 class="job-card-title font-extrabold text-[13px] text-slate-900 dark:text-white leading-[1.25]"
+                      title="${escapeHtml(j.name || j.job_id)}">${escapeHtml(j.name || j.job_id)}</h3>
+                  <div class="text-[9px] text-slate-400 font-mono mt-1 truncate" title="${escapeHtml(j.job_id)}">${escapeHtml(j.job_id)}</div>
+                </div>
+              </div>
+              <div class="shrink-0 flex items-start gap-2">
+                ${statusBadge(status)}
+              <button type="button" onclick="toggleJobCard('${encodedId}')"
+                      aria-expanded="${expanded}" title="${expanded ? 'Recolher informações' : 'Expandir informações'}"
+                      class="shrink-0 w-8 h-8 inline-flex items-center justify-center rounded-lg bg-white/80 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-300 transition shadow-sm">
+                <i class="expand-chevron fa-solid fa-chevron-down text-[10px]"></i>
+              </button>
+              </div>
+            </div>
+
+            <div class="job-card-next-compact mt-2 text-[9px] font-semibold text-slate-400 truncate" title="Próxima execução prevista">
+              <i class="fa-regular fa-clock mr-1"></i>Próxima execução: ${formatCompactTime(j.next_expected_at)}
+            </div>
+
+            <div class="job-card-details mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-[11px]">
+              <div>
+                <span class="block uppercase tracking-wider text-[9px] font-bold text-slate-400 mb-1">Frequência</span>
+                ${frequency}
+              </div>
+              <div>
+                <span class="block uppercase tracking-wider text-[9px] font-bold text-slate-400 mb-1">Tolerância</span>
+                <span class="font-semibold text-slate-700 dark:text-slate-200">${Number(j.grace_period_minutes) || 0} min</span>
+              </div>
+              <div class="schedule-window col-span-2">
+                <span class="block uppercase tracking-wider text-[9px] font-bold text-slate-400 mb-1">Janela de execução</span>
+                <span class="text-slate-600 dark:text-slate-300"><i class="fa-regular fa-calendar mr-1 text-slate-400"></i>${windowText}</span>
+              </div>
+              <div>
+                <span class="block uppercase tracking-wider text-[9px] font-bold text-slate-400 mb-1">Última execução</span>
+                <div class="text-slate-700 dark:text-slate-200">${formatTime(j.last_ping_at)}</div>
+              </div>
+              <div>
+                <span class="block uppercase tracking-wider text-[9px] font-bold text-slate-400 mb-1">Próxima execução</span>
+                <div class="text-slate-700 dark:text-slate-200">${formatTime(j.next_expected_at)}</div>
+              </div>
+              <div class="duration-limit col-span-2 flex items-center justify-between rounded-xl bg-white/60 dark:bg-slate-950/30 border border-slate-200/70 dark:border-slate-800 px-3 py-2">
+                <span class="text-slate-500 dark:text-slate-400"><i class="fa-solid fa-hourglass-half mr-1.5"></i>Limite máximo de execução</span>
+                <strong class="text-slate-700 dark:text-slate-200">${Number(j.max_duration_minutes) || 60} min</strong>
+              </div>
+            </div>
+
+            <div class="job-card-footer mt-auto pt-4 flex items-center justify-between border-t border-slate-200/70 dark:border-slate-800">
+              <span class="operational-label status-icon inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-lg">
+                <i class="fa-solid ${status === 'SUCCESS' ? 'fa-heart-pulse' : status === 'RUNNING' ? 'fa-spinner fa-spin' : 'fa-circle-exclamation'}"></i>
+                ${status === 'SUCCESS' ? 'Serviço operacional' : status === 'RUNNING' ? 'Em processamento' : 'Verificar serviço'}
+              </span>
+              <div class="inline-flex items-center gap-1.5">
+                <button onclick="showJobExecutions(decodeURIComponent('${encodedId}'))" title="Ver últimas execuções"
+                        class="w-8 h-8 rounded-lg bg-sky-50 hover:bg-sky-100 dark:bg-sky-500/10 dark:hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 text-xs transition">
+                  <i class="fa-solid fa-clock-rotate-left"></i>
+                </button>
+                <button onclick="editJobById('${encodedId}')" title="Editar automação"
+                        class="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs transition">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button onclick="confirmDeleteJobById('${encodedId}')" title="Excluir automação"
+                        class="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs transition">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join('');
+      updateExpandAllControl();
+    }
+
+    function renderExecutionsTable(execs) {
+      const execTbody = document.getElementById('executionsTableBody');
+      if (execs.length === 0) {
+        execTbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-400 font-medium">Nenhuma execução registrada ainda.</td></tr>';
+        return;
+      }
+
+      execTbody.innerHTML = execs.map(e => {
+        const dur = e.duration_seconds !== null ? `${Number(e.duration_seconds).toFixed(2)}s` : '-';
+        let errAction = '';
+        if (e.error_message || e.traceback) {
+          errAction = `
+            <button type="button" onclick="showErrorModalById(${Number(e.id)})"
+                    class="ml-2 font-semibold text-indigo-600 dark:text-indigo-400 hover:underline text-[11px] whitespace-nowrap">
+              <i class="fa-solid fa-bug mr-1"></i>Ver traceback
+            </button>
+          `;
+        }
+        const diagnostic = e.error_message
+          ? escapeHtml(e.error_message)
+          : (e.status === 'SUCCESS' ? '<span class="text-emerald-600 dark:text-emerald-400 font-medium">Concluído com sucesso</span>' : '-');
+        return `
+          <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+            <td class="py-3 px-6 whitespace-nowrap">${statusBadge(e.status)}</td>
+            <td class="py-3 px-6 font-mono font-medium text-slate-800 dark:text-slate-200 text-[11px]">${escapeHtml(e.job_id)}</td>
+            <td class="py-3 px-6">${formatTime(e.started_at)}</td>
+            <td class="py-3 px-6">${formatTime(e.finished_at)}</td>
+            <td class="py-3 px-6 font-mono text-slate-600 dark:text-slate-400">${dur}</td>
+            <td class="py-3 px-6 text-slate-600 dark:text-slate-300 max-w-lg break-words">
+              <div class="line-clamp-2" title="${escapeHtml(e.error_message || '')}">${diagnostic}</div>
+              ${errAction}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterJobs() {
+      const term = document.getElementById('filterInput').value.toLowerCase();
+      const filtered = allJobs.filter(j => 
+        (j.name && j.name.toLowerCase().includes(term)) ||
+        (j.job_id && j.job_id.toLowerCase().includes(term))
+      );
+      renderJobsCards(filtered);
+    }
+
+    function filterExecutions() {
+      const input = document.getElementById('executionFilterInput');
+      const term = input ? input.value.trim().toLowerCase() : '';
+      const filtered = term
+        ? allExecutions.filter(e => (e.job_id || '').toLowerCase().includes(term))
+        : allExecutions;
+      renderExecutionsTable(filtered);
+    }
+
+    function editJobById(encodedJobId) {
+      const jobId = decodeURIComponent(encodedJobId);
+      const job = allJobs.find(item => item.job_id === jobId);
+      if (!job) return;
+      editJob(
+        job.job_id,
+        job.name,
+        job.language || '',
+        job.schedule_cron || '',
+        job.expected_interval_minutes,
+        job.grace_period_minutes,
+        job.max_duration_minutes || 60,
+        job.execution_window_start || '',
+        job.execution_window_end || '',
+        job.execution_weekdays || '1,2,3,4,5,6,7'
+      );
+    }
+
+    function confirmDeleteJobById(encodedJobId) {
+      const jobId = decodeURIComponent(encodedJobId);
+      const job = allJobs.find(item => item.job_id === jobId);
+      if (job) confirmDeleteJob(job.job_id, job.name);
+    }
+
+    function editJob(id, name, language, cron, interval, grace, maxDuration, windowStart, windowEnd, weekdays) {
+      document.getElementById('modalTitle').innerText = 'Editar Automação: ' + name;
+      document.getElementById('modalJobId').value = id;
+      document.getElementById('modalJobId').readOnly = true;
+      document.getElementById('modalName').value = name;
+      document.getElementById('modalLanguage').value = language || '';
+      document.getElementById('modalCron').value = cron;
+      document.getElementById('modalInterval').value = interval;
+      document.getElementById('modalGrace').value = grace;
+      document.getElementById('modalMaxDuration').value = maxDuration || 60;
+      document.getElementById('modalWindowStart').value = windowStart || '';
+      document.getElementById('modalWindowEnd').value = windowEnd || '';
+      const selectedDays = (weekdays || '1,2,3,4,5,6,7').split(',');
+      document.querySelectorAll('.execution-weekday').forEach(input => {
+        input.checked = selectedDays.includes(input.value);
+      });
+      openModal('registerModal');
+    }
+
+    async function saveJob(ev) {
+      ev.preventDefault();
+      const windowStart = document.getElementById('modalWindowStart').value;
+      const windowEnd = document.getElementById('modalWindowEnd').value;
+      const weekdays = Array.from(document.querySelectorAll('.execution-weekday:checked')).map(input => Number(input.value));
+      if ((windowStart && !windowEnd) || (!windowStart && windowEnd)) {
+        alert('Informe o início e o fim da janela de execução.');
+        return;
+      }
+      if (windowStart && windowStart >= windowEnd) {
+        alert('O fim da janela deve ser posterior ao início.');
+        return;
+      }
+      if (weekdays.length === 0) {
+        alert('Selecione ao menos um dia da semana.');
+        return;
+      }
+      const payload = {
+        job_id: document.getElementById('modalJobId').value.trim(),
+        name: document.getElementById('modalName').value.trim() || null,
+        language: document.getElementById('modalLanguage').value || null,
+        schedule_cron: document.getElementById('modalCron').value.trim(),
+        expected_interval_minutes: parseInt(document.getElementById('modalInterval').value) || 1440,
+        grace_period_minutes: parseInt(document.getElementById('modalGrace').value) || 15,
+        max_duration_minutes: parseInt(document.getElementById('modalMaxDuration').value) || 60,
+        execution_window_start: windowStart,
+        execution_window_end: windowEnd,
+        execution_weekdays: weekdays
+      };
+
+      try {
+        const res = await fetch('/api/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          closeModal('registerModal');
+          document.getElementById('modalJobId').readOnly = false;
+          document.getElementById('jobForm').reset();
+          document.getElementById('modalTitle').innerText = 'Cadastrar Nova Automação';
+          fetchData();
+        } else {
+          alert('Erro ao salvar job: ' + await res.text());
+        }
+      } catch (err) {
+        alert('Falha na comunicação com o servidor');
+      }
+    }
+
+    function confirmDeleteJob(jobId, jobName) {
+      document.getElementById('deleteJobName').innerText = jobName + ' (' + jobId + ')';
+      document.getElementById('confirmDeleteBtn').onclick = async function() {
+        try {
+          const res = await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
+          if (res.ok) {
+            closeModal('deleteModal');
+            fetchData();
+          } else {
+            alert('Falha ao excluir o job.');
+          }
+        } catch (e) {
+          alert('Erro na requisição.');
+        }
+      };
+      openModal('deleteModal');
+    }
+
+    function showErrorModalById(executionId) {
+      const execution = allExecutions.find(item => Number(item.id) === Number(executionId));
+      if (!execution) {
+        alert('Não foi possível localizar os detalhes desta execução. Atualize a página e tente novamente.');
+        return;
+      }
+
+      document.getElementById('errorModalJob').textContent = execution.job_id || 'Não informado';
+      document.getElementById('errorModalStatus').textContent = statusLabel(execution.status);
+      document.getElementById('errorModalStarted').textContent = formatPlainTime(execution.started_at);
+      document.getElementById('errorModalMessage').textContent = execution.error_message || 'Sem mensagem adicional.';
+      document.getElementById('errorModalTraceback').textContent = execution.traceback || 'Nenhum traceback foi enviado pela automação.';
+      openModal('errorModal');
+    }
+
+    function copyErrorDetails() {
+      const job = document.getElementById('errorModalJob').textContent;
+      const status = document.getElementById('errorModalStatus').textContent;
+      const started = document.getElementById('errorModalStarted').textContent;
+      const message = document.getElementById('errorModalMessage').textContent;
+      const traceback = document.getElementById('errorModalTraceback').textContent;
+      const text = `Automação: ${job}\nStatus: ${status}\nInício: ${started}\n\nErro:\n${message}\n\nTraceback:\n${traceback}`;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copyTbBtn');
+        btn.innerHTML = '<i class="fa-solid fa-check text-emerald-600"></i> Copiado!';
+        setTimeout(() => {
+          btn.innerHTML = '<i class="fa-regular fa-copy"></i> Copiar erro';
+        }, 2000);
+      });
+    }
+
+    // Auto-refresh inteligente a cada 10 segundos
+    setJobsLayout(localStorage.getItem('sentinel_jobs_layout') === 'list' ? 'list' : 'cards', false);
+    showDashboardView(localStorage.getItem('sentinel_dashboard_view') === 'executions' ? 'executions' : 'jobs', false);
+    fetchData();
+    setInterval(fetchData, 10000);
+  </script>
+</body>
+</html>

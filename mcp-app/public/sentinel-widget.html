@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Automation Sentinel</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --bg: #f5f7fb;
+        --surface: #ffffff;
+        --surface-soft: #eef2f7;
+        --text: #172033;
+        --muted: #667085;
+        --border: #dce3ec;
+        --green: #17875d;
+        --blue: #2878d4;
+        --red: #d33f49;
+        --amber: #b86f00;
+        --gray: #697386;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #10151f;
+          --surface: #171e2b;
+          --surface-soft: #202a39;
+          --text: #edf2f7;
+          --muted: #aab6c7;
+          --border: #344054;
+        }
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 16px; background: var(--bg); color: var(--text); }
+      main { max-width: 920px; margin: 0 auto; }
+      header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+      h1 { margin: 0; font-size: 1.15rem; }
+      .subtitle { margin-top: 3px; color: var(--muted); font-size: .78rem; }
+      button, select { font: inherit; }
+      button {
+        border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px;
+        background: var(--surface); color: var(--text); cursor: pointer;
+      }
+      button:disabled { opacity: .55; cursor: wait; }
+      .summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+      .metric { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 11px; }
+      .metric strong { display: block; font-size: 1.35rem; }
+      .metric span { color: var(--muted); font-size: .72rem; }
+      .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 15px 0 8px; }
+      .toolbar h2 { margin: 0; font-size: .95rem; }
+      select { border: 1px solid var(--border); border-radius: 9px; padding: 6px 9px; background: var(--surface); color: var(--text); }
+      .jobs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+      .job { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--status-color, var(--gray)); border-radius: 12px; padding: 12px; }
+      .job-top { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
+      .job h3 { margin: 0; font-size: .9rem; overflow-wrap: anywhere; }
+      .job-id, .meta { color: var(--muted); font-size: .7rem; }
+      .job-id { margin-top: 2px; }
+      .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin-top: 10px; }
+      .badge { border-radius: 999px; padding: 3px 8px; color: #fff; background: var(--status-color, var(--gray)); font-size: .65rem; font-weight: 700; }
+      .status-SUCCESS { --status-color: var(--green); }
+      .status-RUNNING { --status-color: var(--blue); }
+      .status-FAILED, .status-TIMEOUT { --status-color: var(--red); }
+      .status-MISSED { --status-color: var(--amber); }
+      .status-PENDING { --status-color: var(--gray); }
+      .history { display: grid; gap: 7px; }
+      details { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px; }
+      summary { cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: .8rem; }
+      summary::marker { color: var(--muted); }
+      .execution-job { font-weight: 650; overflow-wrap: anywhere; }
+      .execution-time { color: var(--muted); margin-left: auto; font-size: .7rem; }
+      .diagnostic { margin-top: 9px; }
+      .diagnostic p { margin: 4px 0; font-size: .78rem; }
+      pre { margin: 8px 0 0; padding: 9px; border-radius: 8px; background: var(--surface-soft); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; font-size: .7rem; }
+      .empty { padding: 18px; border: 1px dashed var(--border); border-radius: 12px; color: var(--muted); text-align: center; }
+      .error { color: var(--red); }
+      @media (max-width: 640px) {
+        body { padding: 12px; }
+        .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .jobs { grid-template-columns: 1fr; }
+        header { align-items: flex-start; }
+        .meta { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Automation Sentinel</h1>
+          <div class="subtitle" id="updated-at">Aguardando dados atuais...</div>
+        </div>
+        <button id="refresh" type="button">Atualizar</button>
+      </header>
+
+      <section class="summary" id="summary"></section>
+
+      <div class="toolbar">
+        <h2>Automações</h2>
+        <select id="status-filter" aria-label="Filtrar por status">
+          <option value="">Todos os status</option>
+          <option value="FAILED">Com falha</option>
+          <option value="TIMEOUT">Timeout</option>
+          <option value="MISSED">Ausentes</option>
+          <option value="RUNNING">Executando</option>
+          <option value="SUCCESS">Saudáveis</option>
+          <option value="PENDING">Aguardando</option>
+        </select>
+      </div>
+      <section class="jobs" id="jobs"></section>
+
+      <div class="toolbar"><h2>Execuções recentes</h2></div>
+      <section class="history" id="history"></section>
+    </main>
+
+    <script type="module">
+      const summaryEl = document.querySelector("#summary");
+      const jobsEl = document.querySelector("#jobs");
+      const historyEl = document.querySelector("#history");
+      const updatedAtEl = document.querySelector("#updated-at");
+      const refreshEl = document.querySelector("#refresh");
+      const filterEl = document.querySelector("#status-filter");
+      const statusLabels = {
+        SUCCESS: "Saudável", RUNNING: "Executando", FAILED: "Falha",
+        TIMEOUT: "Timeout", MISSED: "Ausente", PENDING: "Aguardando",
+      };
+      let snapshot = { summary: {}, jobs: [], executions: [], generatedAt: null };
+      let rpcId = 0;
+      const pendingRequests = new Map();
+
+      const text = (tag, value, className) => {
+        const el = document.createElement(tag);
+        el.textContent = value ?? "—";
+        if (className) el.className = className;
+        return el;
+      };
+
+      const formatDate = (value) => {
+        if (!value) return "—";
+        const date = new Date(value);
+        return Number.isNaN(date.valueOf()) ? value : new Intl.DateTimeFormat(document.documentElement.lang || "pt-BR", {
+          dateStyle: "short", timeStyle: "medium",
+        }).format(date);
+      };
+
+      const render = () => {
+        const metrics = [
+          ["Total", snapshot.summary?.total ?? 0],
+          ["Saudáveis", snapshot.summary?.healthy ?? 0],
+          ["Executando", snapshot.summary?.running ?? 0],
+          ["Com falha", snapshot.summary?.failed ?? 0],
+          ["Ausentes", snapshot.summary?.missed ?? 0],
+        ];
+        summaryEl.replaceChildren(...metrics.map(([label, value]) => {
+          const card = document.createElement("div");
+          card.className = "metric";
+          card.append(text("strong", value), text("span", label));
+          return card;
+        }));
+
+        updatedAtEl.textContent = snapshot.generatedAt
+          ? `Atualizado em ${formatDate(snapshot.generatedAt)}`
+          : "Aguardando dados atuais...";
+
+        const selectedStatus = filterEl.value;
+        const jobs = (snapshot.jobs ?? []).filter((job) => !selectedStatus || job.status === selectedStatus);
+        if (!jobs.length) {
+          jobsEl.replaceChildren(text("div", "Nenhuma automação encontrada para este filtro.", "empty"));
+        } else {
+          jobsEl.replaceChildren(...jobs.map((job) => {
+            const card = document.createElement("article");
+            card.className = `job status-${job.status}`;
+            const top = document.createElement("div");
+            top.className = "job-top";
+            const titleWrap = document.createElement("div");
+            titleWrap.append(text("h3", job.name), text("div", job.jobId, "job-id"));
+            top.append(titleWrap, text("span", statusLabels[job.status] ?? job.status, "badge"));
+            const meta = document.createElement("div");
+            meta.className = "meta";
+            meta.append(
+              text("span", `Último sinal: ${formatDate(job.lastPingAt)}`),
+              text("span", `Próxima: ${formatDate(job.nextExpectedAt)}`),
+              text("span", `Linguagem: ${job.language ?? "não informada"}`),
+              text("span", `Limite: ${job.maxDurationMinutes ?? "—"} min`),
+            );
+            card.append(top, meta);
+            return card;
+          }));
+        }
+
+        const executions = snapshot.executions ?? [];
+        if (!executions.length) {
+          historyEl.replaceChildren(text("div", "Nenhuma execução recente encontrada.", "empty"));
+        } else {
+          historyEl.replaceChildren(...executions.map((execution) => {
+            const details = document.createElement("details");
+            details.className = `status-${execution.status}`;
+            const summary = document.createElement("summary");
+            summary.append(
+              text("span", statusLabels[execution.status] ?? execution.status, "badge"),
+              text("span", execution.jobId, "execution-job"),
+              text("span", formatDate(execution.startedAt), "execution-time"),
+            );
+            const diagnostic = document.createElement("div");
+            diagnostic.className = "diagnostic";
+            diagnostic.append(
+              text("p", `Término: ${formatDate(execution.finishedAt)}`),
+              text("p", `Duração: ${execution.durationSeconds ?? "—"} s`),
+            );
+            if (execution.errorMessage) diagnostic.append(text("p", execution.errorMessage, "error"));
+            if (execution.traceback) diagnostic.append(text("pre", execution.traceback));
+            details.append(summary, diagnostic);
+            return details;
+          }));
+        }
+      };
+
+      const updateFromResponse = (response) => {
+        const value = response?.structuredContent;
+        if (!value?.jobs || !value?.executions) return;
+        snapshot = value;
+        render();
+      };
+
+      const rpcNotify = (method, params) => {
+        window.parent.postMessage({ jsonrpc: "2.0", method, params }, "*");
+      };
+      const rpcRequest = (method, params) => new Promise((resolve, reject) => {
+        const id = ++rpcId;
+        pendingRequests.set(id, { resolve, reject });
+        window.parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
+      });
+
+      window.addEventListener("message", (event) => {
+        if (event.source !== window.parent) return;
+        const message = event.data;
+        if (!message || message.jsonrpc !== "2.0") return;
+        if (typeof message.id === "number") {
+          const pending = pendingRequests.get(message.id);
+          if (!pending) return;
+          pendingRequests.delete(message.id);
+          if (message.error) pending.reject(message.error);
+          else pending.resolve(message.result);
+          return;
+        }
+        if (message.method === "ui/notifications/tool-result") updateFromResponse(message.params);
+      }, { passive: true });
+
+      const bridgeReady = (async () => {
+        await rpcRequest("ui/initialize", {
+          appInfo: { name: "sentinel-status-widget", version: "0.1.0" },
+          appCapabilities: {},
+          protocolVersion: "2026-01-26",
+        });
+        rpcNotify("ui/notifications/initialized", {});
+      })();
+
+      refreshEl.addEventListener("click", async () => {
+        refreshEl.disabled = true;
+        refreshEl.textContent = "Atualizando...";
+        try {
+          await bridgeReady;
+          const response = await rpcRequest("tools/call", {
+            name: "sentinel_render_status",
+            arguments: { history_limit: 20 },
+          });
+          updateFromResponse(response);
+        } catch (error) {
+          updatedAtEl.textContent = `Falha ao atualizar: ${error?.message ?? "erro desconhecido"}`;
+          updatedAtEl.className = "subtitle error";
+        } finally {
+          refreshEl.disabled = false;
+          refreshEl.textContent = "Atualizar";
+        }
+      });
+      filterEl.addEventListener("change", render);
+      render();
+    </script>
+  </body>
+</html>

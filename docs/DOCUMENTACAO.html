@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Sentinel - Manual e Documentação Técnica Completa</title>
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-light: #e0e7ff;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --bg: #ffffff;
+      --border: #e2e8f0;
+      --code-bg: #0f172a;
+      --code-text: #f8fafc;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: var(--text);
+      background: #f8fafc;
+      line-height: 1.6;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 920px;
+      margin: 0 auto;
+      background: var(--bg);
+      padding: 48px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--border);
+    }
+    .header {
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 24px;
+      margin-bottom: 36px;
+    }
+    .badge {
+      display: inline-block;
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      font-size: 15px;
+      color: var(--text-muted);
+    }
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-top: 36px;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+    p, ul, ol {
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    ul, ol {
+      padding-left: 24px;
+    }
+    li {
+      margin-bottom: 6px;
+    }
+    blockquote {
+      background: #f1f5f9;
+      border-left: 4px solid var(--primary);
+      padding: 12px 18px;
+      border-radius: 0 8px 8px 0;
+      font-style: italic;
+      color: #334155;
+      margin: 16px 0;
+    }
+    .callout {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+      font-size: 13.5px;
+    }
+    .callout-title {
+      font-weight: 700;
+      color: #1d4ed8;
+      margin-bottom: 6px;
+    }
+    .callout-warning {
+      background: #fffbeb;
+      border-color: #fde68a;
+    }
+    .callout-warning .callout-title {
+      color: #b45309;
+    }
+    pre {
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 16px 0;
+    }
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      background: #f1f5f9;
+      color: #0f172a;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12.5px;
+    }
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      font-size: 13.5px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      text-align: left;
+    }
+    th {
+      background: #f8fafc;
+      font-weight: 600;
+      color: #334155;
+    }
+    tr:nth-child(even) {
+      background: #fcfcfd;
+    }
+    .footer {
+      margin-top: 48px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    @media print {
+      body {
+        padding: 0;
+        background: #ffffff;
+      }
+      .container {
+        box-shadow: none;
+        border: none;
+        padding: 0;
+        max-width: 100%;
+      }
+      h2 {
+        break-after: avoid;
+      }
+      pre, table, .callout {
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="header">
+      <span class="badge">Documentação Oficial v1.5</span>
+      <h1>Sentinel — Monitor de Automações</h1>
+      <p class="subtitle">Centralizador de Heartbeats, Detecção de Ausências (Dead Man's Switch) e Notificações de Erros</p>
+    </div>
+
+    <h2>1. Visão Geral</h2>
+    <p>O <strong>Sentinel</strong> é um sistema autônomo e leve, desenvolvido em Python, projetado para monitorar a execução contínua de tarefas agendadas, rotinas batch e robôs de automação corporativos.</p>
+    
+    <blockquote>
+      "Um script que não roda não consegue enviar uma mensagem avisando que não rodou."
+    </blockquote>
+
+    <p>O Sentinel elimina os pontos cegos operacionais atuando em duas frentes complementares:</p>
+    <ul>
+      <li><strong>Notificação Ativa de Erros (Push):</strong> Intercepta falhas em tempo de execução via decorador, extrai o <em>traceback</em> completo e dispara alertas imediatos com os detalhes do erro.</li>
+      <li><strong>Dead Man's Switch (Monitor de Ausência / Heartbeat):</strong> Um vigia contínuo em segundo plano que acompanha os horários previstos de cada rotina. Se um script não enviar o sinal de vida no prazo estipulado, o Sentinel assume a iniciativa e dispara o alerta.</li>
+    </ul>
+
+    <h2>2. O Conceito de Heartbeat e a Falha Silenciosa</h2>
+    <p><strong>Heartbeat</strong> (em tradução literal, <em>"batimento cardíaco"</em>) é um conceito fundamental na engenharia de software para aferir se um processo está <strong>vivo e saudável</strong>.</p>
+    
+    <div class="callout">
+      <div class="callout-title">A Analogia Médica do Monitor Cardíaco</div>
+      Pense no monitor cardíaco de uma UTI hospitalar:
+      <ul style="margin-top: 8px; margin-bottom: 0;">
+        <li>Enquanto o paciente está vivo, o aparelho emite batimentos regulares: <em>bip... bip... bip...</em></li>
+        <li>O médico não precisa perguntar a cada segundo se o paciente está vivo; o batimento contínuo atesta a vida.</li>
+        <li>Se o coração parar de bater (silêncio), o monitor detecta a ausência de sinal e dispara a sirene de emergência: <strong>🚨 PIIIIIIIIII!</strong></li>
+      </ul>
+    </div>
+
+    <h3>Por que arquivos de log tradicionais são cegos para falhas silenciosas?</h3>
+    <p>Sem Heartbeat, você depende de o script executar até o final ou entrar em um bloco <code>try/except</code> para gravar em arquivo de log. Porém, em casos de falhas silenciosas como:</p>
+    <ul>
+      <li>Computador desligado acidentalmente ou reiniciado pelo Windows Update;</li>
+      <li>Queda de energia ou perda de conexão de rede local;</li>
+      <li>Agendador de Tarefas do Windows travado ou desabilitado;</li>
+      <li>Falta de memória RAM (OOM) antes mesmo do Python abrir o script.</li>
+    </ul>
+    <p>Nesses casos, <strong>o seu script sequer chegou a iniciar</strong>. Ele não gerou log, não mandou e-mail e não avisou ninguém.</p>
+    <p>Com o <strong>Heartbeat do Sentinel</strong>, a regra se inverte: <strong>a ausência de notícia é uma má notícia</strong>. Se o script não provar que executou dentro do horário previsto, o Sentinel soa o alarme.</p>
+
+    <h2>3. Arquitetura e Stack de Tecnologias</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Componente</th>
+          <th>Tecnologia</th>
+          <th>Responsabilidade</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Backend API</strong></td>
+          <td>FastAPI (Porta 8050)</td>
+          <td>Recebe requisições de <em>/start</em>, <em>/success</em> e <em>/fail</em> com alta velocidade.</td>
+        </tr>
+        <tr>
+          <td><strong>Banco de Dados</strong></td>
+          <td>SQLite (<code>sentinel.db</code>)</td>
+          <td>Persistência em arquivo único com histórico de execuções e janelas esperadas.</td>
+        </tr>
+        <tr>
+          <td><strong>Vigia em Background</strong></td>
+          <td>APScheduler (AsyncIO)</td>
+          <td>Inspeciona o banco a cada 15 segundos verificando automações ausentes.</td>
+        </tr>
+        <tr>
+          <td><strong>Disparador</strong></td>
+          <td>Telegram Bot API / Console</td>
+          <td>Entrega alertas formatados em HTML com emojis e blocos de código protegidos.</td>
+        </tr>
+        <tr>
+          <td><strong>Painel Visual</strong></td>
+          <td>HTML5 + Tailwind CSS</td>
+          <td>Dashboard responsivo com métricas em tempo real e visualizador de tracebacks.</td>
+        </tr>
+        <tr>
+          <td><strong>Clientes SDK</strong></td>
+          <td>Python e PHP nativos</td>
+          <td>Decorador Python e wrapper PHP sem dependências externas, com identificação automática da linguagem.</td>
+        </tr>
+        <tr>
+          <td><strong>MCP App</strong></td>
+          <td>Node.js + MCP Apps</td>
+          <td>Ferramentas somente leitura e painel visual para ChatGPT, Codex e hosts MCP compatíveis.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>4. Como Funciona a Função Decoradora (@monitor_job)</h2>
+    <p>Um <strong>decorador</strong> (<em>decorator</em>) funciona como uma <strong>"capa protetora"</strong> ou um <strong>"vigia"</strong> colocado em volta de uma função sem alterar uma única linha da regra de negócio que está dentro dela.</p>
+
+    <h3>As 3 Camadas do Decorador</h3>
+    <pre><code>def monitor_job(job_id: str, name: Optional[str] = None, ...):
+    # CAMADA 1: Recebe os parâmetros de configuração (@monitor_job(job_id=...))
+    def decorator(func):
+        # CAMADA 2: Recebe a função original que foi decorada (ex: def main)
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # CAMADA 3: O "dublê" que executa no lugar da sua função
+            with SentinelMonitor(job_id=job_id, name=name, ...):
+                return func(*args, **kwargs)
+        return wrapper
+    return decorator</code></pre>
+
+    <h3>O Context Manager SentinelMonitor (Ciclo de Vida)</h3>
+    <ol>
+      <li><strong>Antes de Executar (<code>__enter__</code>):</strong> Liga o cronômetro (<code>time.time()</code>) e envia um ping HTTP POST para <code>/api/ping/{job_id}/start</code> avisando que o script iniciou. O status no painel muda para ⏳ <em>Executando</em>.</li>
+      <li><strong>Durante a Execução:</strong> A sua automação roda normalmente.</li>
+      <li><strong>Ao Finalizar com Sucesso:</strong> Calcula a duração exata e envia <code>/api/ping/{job_id}/success</code>. O Sentinel atualiza para 🟢 <em>OK</em> e recalcula a próxima data esperada.</li>
+      <li><strong>Se Ocorrer um Erro:</strong> Captura a exceção, extrai o <em>traceback</em> completo, envia para <code>/api/ping/{job_id}/fail</code> (disparando o Telegram) e <strong>relança a exceção original</strong> para não mascarar o erro no seu script.</li>
+    </ol>
+
+    <div class="callout">
+      <div class="callout-title">Isolamento Operacional</div>
+      Se o servidor do Sentinel estiver temporariamente desligado ou houver oscilação de rede, o decorador captura a falha de conexão e apenas exibe um aviso suave no console. <strong>O script da sua automação nunca é interrompido por falha do monitor.</strong>
+    </div>
+
+    <h2>5. Como Iniciar o Serviço</h2>
+    <h3>Opção 1: Atalho Rápido (1 Clique)</h3>
+    <p>Dê um duplo clique no executável:</p>
+    <pre><code>C:\Users\natal.barros\.gemini\antigravity\scratch\automation-sentinel\run.bat</code></pre>
+
+    <h3>Opção 2: Pelo Terminal</h3>
+    <pre><code>cd "C:\Users\natal.barros\.gemini\antigravity\scratch\automation-sentinel"
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8050 --reload</code></pre>
+
+    <div class="callout">
+      <div class="callout-title">Acesso ao Painel e Documentação</div>
+      <div><strong>Painel de Controle:</strong> <a href="http://127.0.0.1:8050">http://127.0.0.1:8050</a></div>
+      <div><strong>Documentação Interativa (Swagger):</strong> <a href="http://127.0.0.1:8050/docs">http://127.0.0.1:8050/docs</a></div>
+    </div>
+
+    <h3>MCP App para ChatGPT e Codex</h3>
+    <p>O diretório <code>mcp-app/</code> contém um servidor MCP somente leitura que consulta a API REST do Sentinel. Ele expõe <code>sentinel_list_jobs</code>, <code>sentinel_get_executions</code> e <code>sentinel_render_status</code>, sem cadastrar, editar, remover ou enviar pings.</p>
+    <pre><code>cd "C:\Automações\automation-sentinel\mcp-app"
+npm.cmd install
+npm.cmd start</code></pre>
+    <p>O endpoint padrão é <code>http://127.0.0.1:8787/mcp</code>. Configure <code>SENTINEL_API_URL</code>, <code>MCP_HOST</code> e <code>MCP_PORT</code> no <code>.env</code>. Para acesso remoto, use HTTPS e implemente autenticação antes de expor dados operacionais.</p>
+
+    <h2>6. Integração nas Automações</h2>
+    <p>Certifique-se de que o arquivo <code>monitor.py</code> esteja na pasta da automação e adicione o decorador na função principal:</p>
+
+    <pre><code>from monitor import monitor_job
+
+@monitor_job(job_id="meu_fechamento_diario", name="Fechamento Diário de Vendas")
+def main():
+    print("Processando dados...")
+    # Se ocorrer qualquer erro, o Sentinel captura e notifica!
+    processar_dados()
+
+if __name__ == "__main__":
+    main()</code></pre>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">Atenção: Regra do try/except</div>
+      Se a sua automação possui um bloco <code>try/except Exception as e:</code> para gravar arquivos de log próprios, lembre-se de <strong>relançar a exceção com <code>raise e</code></strong> ao final do bloco para que o Sentinel receba o alerta.
+    </div>
+
+    <h3>Integração com PHP</h3>
+    <p>Quando <code>sentinel_monitor.php</code> estiver na mesma pasta da rotina, importe-o e envolva o fluxo principal:</p>
+    <pre><code>&lt;?php
+require_once __DIR__ . '/sentinel_monitor.php';
+
+function executarMonitoramento() {
+    // Fluxo principal da automação
+}
+
+sentinel_monitor(
+    'monitoramento_nf_email',
+    'Monitoramento de notas fiscais por e-mail',
+    'executarMonitoramento'
+);</code></pre>
+    <p>Substitua <code>die($mensagem)</code> por <code>sentinel_fail($mensagem)</code> para preservar a mensagem e o stack trace no alerta.</p>
+
+    <h3>Identificação automática da linguagem</h3>
+    <p>O cliente Python envia <code>language: "python"</code> e o cliente PHP envia <code>language: "php"</code> no ping inicial. O dashboard mostra o logotipo do Python ou o elefante do PHP ao lado do nome da rotina. Jobs antigos exibem um ícone neutro até a próxima execução com o cliente atualizado.</p>
+    <div class="callout callout-warning">
+      <div class="callout-title">Cliente PHP copiado</div>
+      Se <code>sentinel_monitor.php</code> estiver copiado em outro sistema, substitua a cópia pela versão mais recente para que ela envie o metadado da linguagem.
+    </div>
+
+    <h3>Scripts PHP com vários ciclos HTTP</h3>
+    <p>Rotinas longas podem continuar o processamento por redirecionamento. Depois de emitir o redirecionamento, use <code>return</code> para finalizar o ciclo monitorado com sucesso. Não use <code>exit</code>, pois o cliente o interpreta como encerramento prematuro.</p>
+    <p>Exceções capturadas em lotes devem ser relançadas. Fila sem progresso e limite máximo de ciclos devem chamar <code>sentinel_fail(...)</code>. Consulte <code>examples/php/analise_nfs_com_sentinel.php</code>.</p>
+
+    <h3>Retorno bancário Grafeno</h3>
+    <p>O exemplo <code>examples/php/retorno_bancario_grafeno_com_sentinel.php</code> importa o cliente da pasta anterior com <code>require_once __DIR__ . '/../sentinel_monitor.php';</code>. Falhas de API, banco, download, log e cópia são registradas; paginação e troca de empresa terminam o ciclo atual com <code>return</code>.</p>
+    <div class="callout callout-warning">
+      <div class="callout-title">Proteção de credenciais</div>
+      Nunca envie ao Sentinel ou ao Telegram o header <code>Authorization</code> nem o token Grafeno. Os alertas devem conter apenas uma descrição resumida da operação que falhou.
+    </div>
+
+    <h2>7. Configuração do Telegram Bot</h2>
+    <ol>
+      <li>Abra o Telegram e inicie uma conversa com o <strong>@BotFather</strong>.</li>
+      <li>Envie o comando <code>/newbot</code> e siga as instruções para gerar o seu <strong>Token de API</strong>.</li>
+      <li>Envie qualquer mensagem para o seu novo bot para abrir o canal.</li>
+      <li>Converse com o bot <strong>@userinfobot</strong> para descobrir o seu <strong>Chat ID</strong> numérico.</li>
+      <li>Preencha o arquivo <code>.env</code> na raiz do Sentinel:</li>
+    </ol>
+    <pre><code>TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrSTUvwxYZ
+TELEGRAM_CHAT_ID=987654321
+CONSOLE_ALERTS=true</code></pre>
+
+    <h2>8. Automações Ativas Monitoradas</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Job ID</th>
+          <th>Nome de Exibição</th>
+          <th>Caminho do Script</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>Crypt_Lamina</code></td>
+          <td>Processamento e criptografia de PDFs</td>
+          <td><code>C:\Automações\crypt_lamina\main.py</code></td>
+        </tr>
+        <tr>
+          <td><code>Slipagem_NetFactor</code></td>
+          <td>Slipagem NetFactor (Exportação Contábil)</td>
+          <td><code>C:\Automações\slipagem\main.py</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="footer">
+      Sentinel Automation Monitor &copy; 2026 — Sistema de Gestão de Confiabilidade de Automações
+    </div>
+  </div>
+
+</body>
+</html>
