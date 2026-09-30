@@ -254,13 +254,21 @@ def generate_pdf():
     story.append(Paragraph("5.1 MCP App para ChatGPT e Codex", h2_style))
     story.append(Paragraph(
         "O <code>mcp-app/</code> 0.2 é somente leitura e oferece saúde, fila de atenção, diagnóstico, métricas, comparações e painéis operacionais; "
-        "não cadastra, edita, remove nem envia pings. Inicie com <code>npm.cmd start</code> ou <code>run_mcp.bat</code> e use "
+        "não cadastra, edita, remove nem envia pings. O painel de operações v2 é responsivo, formata as métricas, prioriza alertas e "
+        "atualiza os dados a cada 60 segundos. Inicie com <code>npm.cmd start</code> ou <code>run_mcp.bat</code> e use "
         "<u>http://127.0.0.1:8787/mcp</u>.",
         body_style
     ))
     story.append(Paragraph(
         "O modo proativo (<code>MCP_PROACTIVE_ENABLED=true</code>) cria uma linha de base silenciosa e envia somente mudanças a "
         "<code>MCP_ALERT_WEBHOOK_URL</code>, com HMAC opcional. Acesso remoto e MCP Events 2.0 exigem HTTPS, autenticação e assinaturas persistentes.",
+        body_style
+    ))
+    story.append(Paragraph(
+        "Para clientes da mesma rede local, configure <code>MCP_HOST=0.0.0.0</code>, reinicie o MCP e cadastre "
+        "<code>http://IP_DA_MAQUINA:8787/mcp</code>. A raiz na porta 8787 serve para teste HTTP; abrir "
+        "<code>/mcp</code> no navegador retorna 406 porque o protocolo exige <code>text/event-stream</code>. "
+        "Libere TCP 8787 no Firewall do Windows somente para o perfil privado e a sub-rede necessária.",
         body_style
     ))
 

@@ -22,7 +22,7 @@ import { createProactiveMonitor } from "./proactive-monitor.mjs";
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 const WIDGET_URI = "ui://sentinel/status/v1.html";
-const OPERATIONS_WIDGET_URI = "ui://sentinel/operations/v1.html";
+const OPERATIONS_WIDGET_URI = "ui://sentinel/operations/v2.html";
 const MCP_PATH = "/mcp";
 const DEFAULT_API_URL = "http://127.0.0.1:8050";
 const DEFAULT_TIMEOUT_MS = 8_000;

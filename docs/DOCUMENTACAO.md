@@ -271,6 +271,10 @@ npm.cmd start
 
 O atalho `run_mcp.bat` executa o mesmo servidor. Por padrão, o endpoint fica em `http://127.0.0.1:8787/mcp` e consulta `http://127.0.0.1:8050`. Os valores podem ser alterados no `.env` com `MCP_HOST`, `MCP_PORT` e `SENTINEL_API_URL`.
 
+Para aceitar clientes de outras máquinas da rede local, use `MCP_HOST=0.0.0.0`, reinicie o processo MCP e cadastre no cliente `http://IP_DA_MAQUINA:8787/mcp`. A raiz `http://IP_DA_MAQUINA:8787/` funciona como verificação HTTP simples. Já `/mcp` usa Streamable HTTP e retorna `406 Not Acceptable` quando aberto diretamente no navegador sem o cabeçalho `Accept: text/event-stream`.
+
+O Firewall do Windows também precisa permitir entrada TCP na porta 8787, preferencialmente somente no perfil privado e limitada à sub-rede que utilizará o Sentinel. O bind `0.0.0.0` não deve ser publicado diretamente na internet; para acesso externo, use HTTPS com autenticação e controle de acesso ou um túnel MCP seguro.
+
 O MCP App expõe dez ferramentas:
 
 * `sentinel_list_jobs`: lista os jobs e resume quantos estão saudáveis, executando, com falha, ausentes ou aguardando;
@@ -282,7 +286,7 @@ O MCP App expõe dez ferramentas:
 * `sentinel_get_metrics`: calcula taxa de sucesso/ausência, duração média, p95 e violações;
 * `sentinel_compare_periods`: compara hoje com ontem ou os últimos 7 com os últimos 30 dias;
 * `sentinel_check_changes`: compara a fila atual com o último estado persistido sem emitir alerta;
-* `sentinel_render_operations`: renderiza fila de atenção, barras, linha do tempo, métricas e diagnósticos.
+* `sentinel_render_operations`: renderiza o painel responsivo `ui://sentinel/operations/v2.html`, com visão geral, fila priorizada, distribuição, métricas formatadas, linha do tempo e diagnósticos expansíveis. O painel permite atualização manual e sincroniza automaticamente a cada 60 segundos.
 
 #### Monitoramento proativo
 
@@ -292,7 +296,7 @@ Com `MCP_ALERT_WEBHOOK_URL`, o evento é enviado a um webhook HTTPS. `MCP_ALERT_
 
 A entrega proativa diretamente em chats depende de MCP Events 2.0, armazenamento de assinaturas, verificação de callback e HTTPS público. Esta versão não apresenta polling local como se fosse uma assinatura nativa do ChatGPT.
 
-O componente usa a ponte padrão MCP Apps (`ui/initialize`, `ui/notifications/tool-result` e `tools/call`) e continua funcional como ferramenta estruturada em clientes que não renderizam UI. Para acesso remoto, publique somente por HTTPS e adicione autenticação e controle de acesso antes de expor dados operacionais.
+O componente usa a ponte padrão MCP Apps (`ui/initialize`, `ui/notifications/tool-result` e `tools/call`) e continua funcional como ferramenta estruturada em clientes que não renderizam UI. O acesso HTTP em `0.0.0.0` é restrito ao uso em rede local confiável; para acesso pela internet, publique somente por HTTPS e adicione autenticação e controle de acesso antes de expor dados operacionais.
 
 Execute `npm.cmd test` dentro de `mcp-app/` para validar o transporte Streamable HTTP com um cliente MCP real.
 

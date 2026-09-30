@@ -80,6 +80,17 @@ npm.cmd start
 
 No Windows, também é possível usar `run_mcp.bat`. O endpoint local será `http://127.0.0.1:8787/mcp`.
 
+Para permitir conexões de outras máquinas da mesma rede, configure o bind no `.env` e reinicie o MCP App:
+
+```dotenv
+MCP_HOST=0.0.0.0
+MCP_PORT=8787
+```
+
+Use `http://IP_DA_MAQUINA:8787/` somente para verificar se o serviço responde. O endereço MCP que deve ser cadastrado no cliente é `http://IP_DA_MAQUINA:8787/mcp`. Abrir `/mcp` diretamente em um navegador comum retorna `406 Not Acceptable`, pois esse endpoint exige um cliente Streamable HTTP que aceite `text/event-stream`.
+
+Se outra máquina ainda não alcançar a porta, crie uma regra de entrada TCP 8787 no Firewall do Windows limitada ao perfil privado e à sub-rede necessária. O bind em `0.0.0.0` não substitui a liberação do firewall.
+
 Ferramentas expostas na versão 0.2:
 
 * `sentinel_list_jobs` — lista automações, estados atuais e resumo operacional;
@@ -91,13 +102,13 @@ Ferramentas expostas na versão 0.2:
 * `sentinel_compare_periods` — compara hoje × ontem ou 7 × 30 dias;
 * `sentinel_check_changes` — compara a fila atual com o último estado persistido;
 * `sentinel_render_status` — exibe o painel compacto original;
-* `sentinel_render_operations` — exibe fila, barras, métricas, linha do tempo e erros.
+* `sentinel_render_operations` — exibe um painel operacional moderno e responsivo com visão geral, fila priorizada, distribuição, métricas formatadas, linha do tempo e diagnósticos expansíveis. O painel permite atualização manual e sincroniza automaticamente a cada 60 segundos.
 
 O monitor proativo é ativado com `MCP_PROACTIVE_ENABLED=true`. Ele consulta a API no intervalo configurado, grava somente a fotografia operacional em `mcp-app/data/attention-state.json` e não emite nada quando o estado permanece igual. Se `MCP_ALERT_WEBHOOK_URL` estiver configurada, envia `sentinel.attention.changed` apenas quando um job entra, muda ou sai da fila; `MCP_ALERT_WEBHOOK_SECRET` adiciona assinatura HMAC-SHA256.
 
 > O webhook é a integração proativa desta versão local. A entrega nativa de eventos em chats exige MCP Events, protocolo 2.0, armazenamento de assinaturas e callbacks HTTPS; ela não é simulada por polling do ChatGPT.
 
-As variáveis opcionais `SENTINEL_API_URL`, `MCP_HOST` e `MCP_PORT` ficam no `.env`. Para conectar um host remoto, publique o endpoint com HTTPS e informe a URL completa terminada em `/mcp`. Não exponha o serviço publicamente sem autenticação e controle de acesso.
+As variáveis opcionais `SENTINEL_API_URL`, `MCP_HOST` e `MCP_PORT` ficam no `.env`. O bind `0.0.0.0` destina-se à rede local confiável. Para acesso pela internet, não encaminhe a porta 8787 diretamente: publique por HTTPS com autenticação e controle de acesso, ou use um túnel MCP seguro, sempre informando a URL completa terminada em `/mcp`.
 
 Validação local:
 
