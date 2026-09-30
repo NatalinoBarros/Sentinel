@@ -95,6 +95,7 @@ Ferramentas expostas na versão 0.2:
 
 * `sentinel_list_jobs` — lista automações, estados atuais e resumo operacional;
 * `sentinel_update_job_schedule` — atualiza o cron e os dias permitidos de um job existente, preservando os demais parâmetros;
+* `sentinel_render_schedule_manager` — abre o MCP App visual para selecionar jobs, revisar o cron e salvar agendamentos;
 * `sentinel_get_executions` — consulta histórico, mensagens de erro e traceback;
 * `sentinel_self_status` — informa versões, uptime, banco, última atualização e latência;
 * `sentinel_get_attention_queue` — retorna somente jobs que exigem atenção, por criticidade;

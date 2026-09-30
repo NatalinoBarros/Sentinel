@@ -25,13 +25,15 @@ const WIDGET_URI = "ui://sentinel/status/v1.html";
 // The URI is a cache key for MCP App hosts. Bump it whenever the widget HTML
 // changes materially so connected clients do not reuse an older interface.
 const OPERATIONS_WIDGET_URI = "ui://sentinel/operations/v3.html";
+const SCHEDULE_WIDGET_URI = "ui://sentinel/schedules/v1.html";
 const MCP_PATH = "/mcp";
 const DEFAULT_API_URL = "http://127.0.0.1:8050";
 const DEFAULT_TIMEOUT_MS = 8_000;
-const MCP_VERSION = "0.4.0";
+const MCP_VERSION = "0.5.0";
 const MCP_STARTED_AT = new Date();
 const widgetHtml = readFileSync(resolve(MODULE_DIR, "public", "sentinel-widget.html"), "utf8");
 const operationsWidgetHtml = readFileSync(resolve(MODULE_DIR, "public", "operations-widget.html"), "utf8");
+const scheduleWidgetHtml = readFileSync(resolve(MODULE_DIR, "public", "schedule-widget.html"), "utf8");
 
 const statusValues = ["PENDING", "RUNNING", "SUCCESS", "FAILED", "MISSED", "TIMEOUT"];
 
@@ -48,6 +50,7 @@ const jobSchema = z.object({
   executionWindowStart: z.string().nullable(),
   executionWindowEnd: z.string().nullable(),
   executionWeekdays: z.string().nullable(),
+  scheduleCron: z.string().nullable(),
 });
 
 const executionSchema = z.object({
@@ -122,6 +125,7 @@ export function normalizeJob(job) {
     executionWindowStart: asNullableString(job.execution_window_start),
     executionWindowEnd: asNullableString(job.execution_window_end),
     executionWeekdays: asNullableString(job.execution_weekdays),
+    scheduleCron: asNullableString(job.schedule_cron),
   };
 }
 
@@ -361,6 +365,17 @@ export function createSentinelMcpServer({
     ],
   }));
 
+  registerAppResource(server, "sentinel-schedule-widget", SCHEDULE_WIDGET_URI, {}, async () => ({
+    contents: [
+      {
+        uri: SCHEDULE_WIDGET_URI,
+        mimeType: RESOURCE_MIME_TYPE,
+        text: scheduleWidgetHtml,
+        _meta: { ui: { prefersBorder: true } },
+      },
+    ],
+  }));
+
   registerAppTool(
     server,
     "sentinel_self_status",
@@ -444,6 +459,31 @@ export function createSentinelMcpServer({
         return textResult(
           `Agendamento de ${updated.name ?? jobId} atualizado para '${updated.schedule_cron}'. Próxima execução: ${updated.next_expected_at ?? "não calculada"}.`,
           { job: normalizeJob(updated), scheduleCron: updated.schedule_cron },
+        );
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "sentinel_render_schedule_manager",
+    {
+      title: "Gerenciar agendamentos do Sentinel",
+      description: "Abre uma tela MCP App para consultar e atualizar o cron e os dias permitidos dos jobs.",
+      inputSchema: { job_id: z.string().min(1).optional() },
+      outputSchema: { jobs: z.array(jobSchema), selectedJobId: z.string().nullable() },
+      _meta: { ui: { resourceUri: SCHEDULE_WIDGET_URI } },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ job_id: jobId } = {}) => {
+      try {
+        const jobs = await fetchJobs(apiUrl, {}, fetchImpl);
+        const selectedJobId = jobId && jobs.some((job) => job.jobId === jobId) ? jobId : jobs[0]?.jobId ?? null;
+        return textResult(
+          `Gerenciador carregado com ${jobs.length} job(s).`,
+          { jobs, selectedJobId },
         );
       } catch (error) {
         return errorResult(error);

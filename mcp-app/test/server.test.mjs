@@ -140,6 +140,7 @@ test("expõe ferramentas MCP e retorna dados estruturados", async () => {
       "sentinel_get_metrics",
       "sentinel_list_jobs",
       "sentinel_render_operations",
+      "sentinel_render_schedule_manager",
       "sentinel_render_status",
       "sentinel_self_status",
       "sentinel_update_job_schedule",
@@ -150,6 +151,13 @@ test("expõe ferramentas MCP e retorna dados estruturados", async () => {
   assert.equal(result.isError, undefined);
   assert.equal(result.structuredContent.summary.total, 2);
   assert.equal(result.structuredContent.executions[0].errorMessage, "Falha simulada");
+});
+
+test("renderiza o gerenciador de agendamentos com cron atual", async () => {
+  const result = await client.callTool({ name: "sentinel_render_schedule_manager", arguments: { job_id: "job_ok" } });
+  assert.equal(result.isError, undefined);
+  assert.equal(result.structuredContent.selectedJobId, "job_ok");
+  assert.equal(result.structuredContent.jobs.length, 2);
 });
 
 test("atualiza agendamento via MCP preservando o job", async () => {

@@ -275,10 +275,11 @@ Para aceitar clientes de outras máquinas da rede local, use `MCP_HOST=0.0.0.0`,
 
 O Firewall do Windows também precisa permitir entrada TCP na porta 8787, preferencialmente somente no perfil privado e limitada à sub-rede que utilizará o Sentinel. O bind `0.0.0.0` não deve ser publicado diretamente na internet; para acesso externo, use HTTPS com autenticação e controle de acesso ou um túnel MCP seguro.
 
-O MCP App expõe onze ferramentas:
+O MCP App expõe doze ferramentas:
 
 * `sentinel_list_jobs`: lista os jobs e resume quantos estão saudáveis, executando, com falha, ausentes ou aguardando;
 * `sentinel_update_job_schedule`: atualiza somente o cron e os dias permitidos de um job existente, preservando os demais parâmetros;
+* `sentinel_render_schedule_manager`: abre o painel MCP App de agendamentos, com seleção do job, cron, dias permitidos, prévia e confirmação antes de salvar;
 * `sentinel_get_executions`: retorna o histórico recente e os diagnósticos completos de falha;
 * `sentinel_render_status`: associa os dados atuais ao recurso visual `ui://sentinel/status/v1.html`.
 * `sentinel_self_status`: verifica versões, uptime, conexão com API/SQLite, última atualização e latência;
