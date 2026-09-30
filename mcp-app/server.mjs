@@ -22,11 +22,13 @@ import { createProactiveMonitor } from "./proactive-monitor.mjs";
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 const WIDGET_URI = "ui://sentinel/status/v1.html";
-const OPERATIONS_WIDGET_URI = "ui://sentinel/operations/v2.html";
+// The URI is a cache key for MCP App hosts. Bump it whenever the widget HTML
+// changes materially so connected clients do not reuse an older interface.
+const OPERATIONS_WIDGET_URI = "ui://sentinel/operations/v3.html";
 const MCP_PATH = "/mcp";
 const DEFAULT_API_URL = "http://127.0.0.1:8050";
 const DEFAULT_TIMEOUT_MS = 8_000;
-const MCP_VERSION = "0.2.0";
+const MCP_VERSION = "0.4.0";
 const MCP_STARTED_AT = new Date();
 const widgetHtml = readFileSync(resolve(MODULE_DIR, "public", "sentinel-widget.html"), "utf8");
 const operationsWidgetHtml = readFileSync(resolve(MODULE_DIR, "public", "operations-widget.html"), "utf8");
@@ -164,6 +166,42 @@ async function fetchJson(apiUrl, pathname, fetchImpl = fetch) {
     throw new Error(`Sentinel indisponível em ${normalizeApiUrl(apiUrl)}: ${error.message}`);
   }
 
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 500).trim();
+    throw new Error(`Sentinel respondeu HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
+  }
+  return response.json();
+}
+
+async function updateJobSchedule(apiUrl, { jobId, scheduleCron, executionWeekdays }, fetchImpl = fetch) {
+  const rawJobs = await fetchJson(apiUrl, "/api/jobs", fetchImpl);
+  const current = rawJobs.find((job) => String(job.job_id) === jobId);
+  if (!current) throw new Error(`Automação '${jobId}' não encontrada.`);
+
+  const payload = {
+    job_id: jobId,
+    name: current.name,
+    language: current.language,
+    schedule_cron: scheduleCron,
+    expected_interval_minutes: current.expected_interval_minutes,
+    grace_period_minutes: current.grace_period_minutes,
+    max_duration_minutes: current.max_duration_minutes,
+    execution_window_start: current.execution_window_start,
+    execution_window_end: current.execution_window_end,
+    execution_weekdays: executionWeekdays,
+  };
+  const url = `${normalizeApiUrl(apiUrl)}/api/jobs`;
+  let response;
+  try {
+    response = await fetchImpl(url, {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw new Error(`Sentinel indisponível em ${normalizeApiUrl(apiUrl)}: ${error.message}`);
+  }
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 500).trim();
     throw new Error(`Sentinel respondeu HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
@@ -375,6 +413,37 @@ export function createSentinelMcpServer({
         return textResult(
           `${jobs.length} automação(ões) encontrada(s).`,
           { summary: summarizeJobs(jobs), jobs },
+        );
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "sentinel_update_job_schedule",
+    {
+      title: "Atualizar agendamento de automação",
+      description: "Atualiza somente o cron e os dias permitidos de uma automação existente, preservando os demais parâmetros.",
+      inputSchema: {
+        job_id: z.string().min(1),
+        schedule_cron: z.string().min(5).describe("Expressão cron de cinco campos."),
+        execution_weekdays: z.array(z.number().int().min(1).max(7)).min(1).default([1, 2, 3, 4, 5, 6, 7]),
+      },
+      _meta: {},
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ job_id: jobId, schedule_cron: scheduleCron, execution_weekdays: executionWeekdays }) => {
+      try {
+        const updated = await updateJobSchedule(
+          apiUrl,
+          { jobId, scheduleCron, executionWeekdays },
+          fetchImpl,
+        );
+        return textResult(
+          `Agendamento de ${updated.name ?? jobId} atualizado para '${updated.schedule_cron}'. Próxima execução: ${updated.next_expected_at ?? "não calculada"}.`,
+          { job: normalizeJob(updated), scheduleCron: updated.schedule_cron },
         );
       } catch (error) {
         return errorResult(error);

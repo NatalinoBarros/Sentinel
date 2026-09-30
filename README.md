@@ -18,7 +18,7 @@ Ele resolve os dois grandes problemas de quem mantém automações:
 * **Dashboard Web:** Interface em tela cheia com indicadores laterais, cards ordenados por criticidade e histórico de até 100 execuções.
 * **Client SDK:** clientes sem dependências externas para plugar em scripts Python e PHP.
 * **Identificação de Linguagem:** cada cliente informa automaticamente sua linguagem; o dashboard mostra os ícones do Python, PHP e arquivos BAT ao lado da rotina.
-* **MCP App:** integração somente leitura para ChatGPT, Codex e outros hosts compatíveis com MCP Apps, com ferramentas de consulta e painel visual.
+* **MCP App:** integração para ChatGPT, Codex e outros hosts compatíveis com MCP Apps, com consultas, painel visual e atualização controlada de agendamentos.
 
 ---
 
@@ -68,7 +68,7 @@ Acesse no seu navegador:
 
 ### 4. MCP App para ChatGPT e Codex
 
-O MCP App fica em `mcp-app/` e consome as APIs REST do Sentinel. Esta primeira versão é deliberadamente **somente leitura**: ela consulta estados e diagnósticos, mas não cadastra, edita, remove ou envia pings em nome das automações.
+O MCP App fica em `mcp-app/` e consome as APIs REST do Sentinel. As ferramentas operacionais permanecem somente leitura; a única mutação exposta é `sentinel_update_job_schedule`, restrita ao cron e aos dias permitidos de um job existente. O MCP não remove jobs nem envia pings em nome das automações.
 
 Com o Sentinel da porta 8050 em execução, instale e inicie o MCP App:
 
@@ -94,6 +94,7 @@ Se outra máquina ainda não alcançar a porta, crie uma regra de entrada TCP 87
 Ferramentas expostas na versão 0.2:
 
 * `sentinel_list_jobs` — lista automações, estados atuais e resumo operacional;
+* `sentinel_update_job_schedule` — atualiza o cron e os dias permitidos de um job existente, preservando os demais parâmetros;
 * `sentinel_get_executions` — consulta histórico, mensagens de erro e traceback;
 * `sentinel_self_status` — informa versões, uptime, banco, última atualização e latência;
 * `sentinel_get_attention_queue` — retorna somente jobs que exigem atenção, por criticidade;

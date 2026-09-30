@@ -330,7 +330,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8050 --reload</code></pre
     </div>
 
     <h3>MCP App para ChatGPT e Codex</h3>
-    <p>O diretório <code>mcp-app/</code> contém um servidor MCP somente leitura que consulta a API REST do Sentinel. A versão 0.2 adiciona saúde interna, fila de atenção, diagnóstico, métricas, comparação de períodos, detecção de mudanças e o painel <code>sentinel_render_operations</code>, sem cadastrar, editar, remover ou enviar pings. O recurso visual <code>ui://sentinel/operations/v2.html</code> oferece uma interface moderna e responsiva, com métricas formatadas, fila priorizada, distribuição de estados, linha do tempo e atualização automática a cada 60 segundos.</p>
+    <p>O diretório <code>mcp-app/</code> contém um servidor MCP que consulta a API REST do Sentinel. A versão 0.4 mantém as operações gerais somente leitura e adiciona <code>sentinel_update_job_schedule</code>, restrita à atualização do cron e dos dias permitidos de jobs existentes; ela não remove jobs nem envia pings. O recurso visual <code>ui://sentinel/operations/v3.html</code> oferece uma interface moderna e responsiva, com métricas formatadas, fila priorizada, distribuição de estados, linha do tempo e atualização automática a cada 60 segundos. O URI versionado evita a reutilização da interface anterior pelo cache do host MCP.</p>
     <pre><code>cd "C:\Automações\automation-sentinel\mcp-app"
 npm.cmd install
 npm.cmd start</code></pre>

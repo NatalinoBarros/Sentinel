@@ -66,9 +66,18 @@ function close(server) {
 }
 
 before(async () => {
-  apiServer = createServer((req, res) => {
+  apiServer = createServer(async (req, res) => {
     const url = new URL(req.url, "http://localhost");
     res.setHeader("content-type", "application/json");
+    if (url.pathname === "/api/jobs" && req.method === "POST") {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      const current = jobs.find((job) => job.job_id === payload.job_id);
+      if (!current) return res.writeHead(404).end(JSON.stringify({ detail: "not found" }));
+      Object.assign(current, payload, { next_expected_at: "2026-10-02T10:00:00" });
+      return res.end(JSON.stringify(current));
+    }
     if (url.pathname === "/api/jobs") return res.end(JSON.stringify(jobs));
     if (url.pathname === "/api/health") return res.end(JSON.stringify({
       service: "automation-sentinel",
@@ -133,6 +142,7 @@ test("expõe ferramentas MCP e retorna dados estruturados", async () => {
       "sentinel_render_operations",
       "sentinel_render_status",
       "sentinel_self_status",
+      "sentinel_update_job_schedule",
     ],
   );
 
@@ -140,6 +150,21 @@ test("expõe ferramentas MCP e retorna dados estruturados", async () => {
   assert.equal(result.isError, undefined);
   assert.equal(result.structuredContent.summary.total, 2);
   assert.equal(result.structuredContent.executions[0].errorMessage, "Falha simulada");
+});
+
+test("atualiza agendamento via MCP preservando o job", async () => {
+  const result = await client.callTool({
+    name: "sentinel_update_job_schedule",
+    arguments: { job_id: "job_ok", schedule_cron: "0 10 2 * *", execution_weekdays: [1, 2, 3, 4, 5, 6, 7] },
+  });
+  assert.equal(result.isError, undefined);
+  assert.equal(result.structuredContent.scheduleCron, "0 10 2 * *");
+  assert.equal(result.structuredContent.job.nextExpectedAt, "2026-10-02T10:00:00");
+  Object.assign(jobs[0], {
+    schedule_cron: null,
+    next_expected_at: "2026-09-29T09:30:00",
+    execution_weekdays: "1,2,3,4,5",
+  });
 });
 
 test("retorna saúde, fila de atenção, diagnóstico e métricas", async () => {

@@ -102,7 +102,7 @@ Nesses cenários, **o script sequer chegou a iniciar**. Ele não gerou logs, nã
 * **APScheduler:** Motor de segundo plano que inspeciona o Dead Man's Switch, consulta comandos do Telegram e entrega relatórios automáticos agendados.
 * **Telegram Bot API:** Entrega alertas, responde consultas de status/histórico e cadastra relatórios programados. Apenas o `TELEGRAM_CHAT_ID` autorizado pode executar comandos.
 * **Dashboard Web:** Interface responsiva em `100vw × 100vh`, com indicadores laterais, visualização em cards/lista, expansão individual/coletiva, ordenação por criticidade e histórico com modal de *traceback*.
-* **MCP App (`mcp-app/`):** servidor Node.js com transporte Streamable HTTP em `/mcp`, ferramentas somente leitura e componente visual compatível com o padrão MCP Apps.
+* **MCP App (`mcp-app/`):** servidor Node.js com transporte Streamable HTTP em `/mcp`, ferramentas operacionais, atualização controlada de agendamentos e componente visual compatível com o padrão MCP Apps.
 * **Cliente Python (`client/monitor.py`):** Decorador `@monitor_job` construído exclusivamente com a biblioteca padrão do Python (`urllib`).
 * **Cliente PHP (`client/sentinel_monitor.php`):** Wrapper `sentinel_monitor(...)` sem dependências externas, com captura de exceções, erros fatais, duração e encerramentos prematuros.
 * **Identificação de linguagem:** o ping inicial informa automaticamente `python` ou `php`; o dashboard apresenta ícones próprios para Python, PHP e arquivos BAT.
@@ -261,7 +261,7 @@ Acesse no navegador:
 
 ### 6.3 MCP App para ChatGPT e Codex
 
-O diretório `mcp-app/` contém um servidor MCP separado que consulta as rotas REST do Sentinel. A versão 0.2 continua somente leitura e não cadastra, edita, remove ou envia pings em nome das automações.
+O diretório `mcp-app/` contém um servidor MCP separado que consulta as rotas REST do Sentinel. A versão 0.4 mantém as operações gerais somente leitura e adiciona apenas a atualização controlada de cron e dias permitidos para jobs existentes; ela não remove jobs nem envia pings.
 
 ```powershell
 cd "C:\Automações\automation-sentinel\mcp-app"
@@ -275,9 +275,10 @@ Para aceitar clientes de outras máquinas da rede local, use `MCP_HOST=0.0.0.0`,
 
 O Firewall do Windows também precisa permitir entrada TCP na porta 8787, preferencialmente somente no perfil privado e limitada à sub-rede que utilizará o Sentinel. O bind `0.0.0.0` não deve ser publicado diretamente na internet; para acesso externo, use HTTPS com autenticação e controle de acesso ou um túnel MCP seguro.
 
-O MCP App expõe dez ferramentas:
+O MCP App expõe onze ferramentas:
 
 * `sentinel_list_jobs`: lista os jobs e resume quantos estão saudáveis, executando, com falha, ausentes ou aguardando;
+* `sentinel_update_job_schedule`: atualiza somente o cron e os dias permitidos de um job existente, preservando os demais parâmetros;
 * `sentinel_get_executions`: retorna o histórico recente e os diagnósticos completos de falha;
 * `sentinel_render_status`: associa os dados atuais ao recurso visual `ui://sentinel/status/v1.html`.
 * `sentinel_self_status`: verifica versões, uptime, conexão com API/SQLite, última atualização e latência;
@@ -286,7 +287,7 @@ O MCP App expõe dez ferramentas:
 * `sentinel_get_metrics`: calcula taxa de sucesso/ausência, duração média, p95 e violações;
 * `sentinel_compare_periods`: compara hoje com ontem ou os últimos 7 com os últimos 30 dias;
 * `sentinel_check_changes`: compara a fila atual com o último estado persistido sem emitir alerta;
-* `sentinel_render_operations`: renderiza o painel responsivo `ui://sentinel/operations/v2.html`, com visão geral, fila priorizada, distribuição, métricas formatadas, linha do tempo e diagnósticos expansíveis. O painel permite atualização manual e sincroniza automaticamente a cada 60 segundos.
+* `sentinel_render_operations`: renderiza o painel responsivo `ui://sentinel/operations/v3.html`, com visão geral, fila priorizada, distribuição, métricas formatadas, linha do tempo e diagnósticos expansíveis. O painel permite atualização manual e sincroniza automaticamente a cada 60 segundos. O URI é versionado para impedir que hosts MCP reutilizem uma interface antiga em cache.
 
 #### Monitoramento proativo
 

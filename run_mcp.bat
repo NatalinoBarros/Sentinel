@@ -2,4 +2,5 @@
 setlocal
 cd /d "%~dp0mcp-app"
 npm.cmd start
+pause
 endlocal
