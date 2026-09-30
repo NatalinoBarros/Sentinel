@@ -1,8 +1,9 @@
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime
+from time import perf_counter
 from typing import Optional, List, Literal
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, model_validator
@@ -17,6 +18,8 @@ from app.database import (
     record_success,
     record_failure,
     get_recent_executions,
+    get_executions_between,
+    get_database_health,
     delete_job
 )
 from app.scheduler import start_scheduler, stop_scheduler
@@ -32,10 +35,13 @@ async def lifespan(app: FastAPI):
     # Shutdown
     stop_scheduler()
 
+SENTINEL_VERSION = "1.1.0"
+API_STARTED_AT = datetime.now()
+
 app = FastAPI(
     title="Sentinel - Automation Monitor",
     description="Centralizador de Monitoramento, Heartbeats e Alertas para Automações",
-    version="1.0.0",
+    version=SENTINEL_VERSION,
     lifespan=lifespan
 )
 
@@ -103,6 +109,30 @@ async def get_dashboard():
 def api_list_jobs():
     return list_jobs()
 
+
+@app.get("/api/health")
+def api_health():
+    started = perf_counter()
+    try:
+        database = get_database_health()
+    except Exception as exc:
+        database = {
+            "connected": False,
+            "jobs_count": None,
+            "executions_count": None,
+            "last_updated_at": None,
+            "error": str(exc),
+        }
+    return {
+        "service": "automation-sentinel",
+        "version": SENTINEL_VERSION,
+        "started_at": API_STARTED_AT.isoformat(),
+        "uptime_seconds": max(0, int((datetime.now() - API_STARTED_AT).total_seconds())),
+        "database": database,
+        "check_latency_ms": round((perf_counter() - started) * 1000, 2),
+        "checked_at": datetime.now().isoformat(),
+    }
+
 @app.post("/api/jobs")
 def api_register_job(payload: JobRegisterRequest):
     job = register_or_update_job(
@@ -167,6 +197,23 @@ async def api_ping_fail(job_id: str, payload: PingFailRequest):
 @app.get("/api/executions")
 def api_list_executions(limit: int = 30, job_id: Optional[str] = None):
     return get_recent_executions(limit=limit, job_id=job_id)
+
+
+@app.get("/api/executions/period")
+def api_list_executions_period(
+    started_from: datetime,
+    started_to: datetime,
+    job_id: Optional[str] = None,
+    limit: int = Query(default=5000, ge=1, le=10000),
+):
+    if started_from >= started_to:
+        raise HTTPException(status_code=400, detail="started_from deve ser anterior a started_to")
+    return get_executions_between(
+        started_from=started_from,
+        started_to=started_to,
+        job_id=job_id,
+        limit=limit,
+    )
 
 @app.post("/api/test-telegram")
 async def api_test_telegram():

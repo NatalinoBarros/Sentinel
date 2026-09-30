@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { after, before, test } from "node:test";
+import { unlink } from "node:fs/promises";
+import { resolve } from "node:path";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -40,7 +42,17 @@ const executions = [
     error_message: "Falha simulada",
     traceback: "Traceback simulado",
   },
+  {
+    id: 9,
+    job_id: "job_ok",
+    status: "SUCCESS",
+    started_at: "2026-09-29T07:30:00",
+    finished_at: "2026-09-29T07:30:10",
+    duration_seconds: 10,
+  },
 ];
+
+const statePath = resolve("test", ".attention-state-test.json");
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -58,12 +70,24 @@ before(async () => {
     const url = new URL(req.url, "http://localhost");
     res.setHeader("content-type", "application/json");
     if (url.pathname === "/api/jobs") return res.end(JSON.stringify(jobs));
+    if (url.pathname === "/api/health") return res.end(JSON.stringify({
+      service: "automation-sentinel",
+      version: "1.1.0",
+      uptime_seconds: 120,
+      database: { connected: true, jobs_count: 2, executions_count: 2, last_updated_at: "2026-09-29T09:00:00" },
+      checked_at: "2026-09-29T09:01:00",
+    }));
+    if (url.pathname === "/api/executions/period") return res.end(JSON.stringify(executions));
     if (url.pathname === "/api/executions") return res.end(JSON.stringify(executions));
     res.writeHead(404).end(JSON.stringify({ detail: "not found" }));
   });
   await listen(apiServer);
   const apiPort = apiServer.address().port;
-  mcpServer = await startMcpHttpServer({ apiUrl: `http://127.0.0.1:${apiPort}`, port: 0 });
+  mcpServer = await startMcpHttpServer({
+    apiUrl: `http://127.0.0.1:${apiPort}`,
+    port: 0,
+    proactiveStatePath: statePath,
+  });
   const mcpPort = mcpServer.address().port;
   client = new Client({ name: "sentinel-test", version: "0.1.0" });
   await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${mcpPort}/mcp`)));
@@ -73,6 +97,7 @@ after(async () => {
   await client?.close();
   await close(mcpServer);
   await close(apiServer);
+  await unlink(statePath).catch(() => {});
 });
 
 test("normaliza os dados do banco para o contrato MCP", () => {
@@ -97,11 +122,52 @@ test("expõe ferramentas MCP e retorna dados estruturados", async () => {
   const { tools } = await client.listTools();
   assert.deepEqual(
     tools.map((tool) => tool.name).sort(),
-    ["sentinel_get_executions", "sentinel_list_jobs", "sentinel_render_status"],
+    [
+      "sentinel_check_changes",
+      "sentinel_compare_periods",
+      "sentinel_diagnose_job",
+      "sentinel_get_attention_queue",
+      "sentinel_get_executions",
+      "sentinel_get_metrics",
+      "sentinel_list_jobs",
+      "sentinel_render_operations",
+      "sentinel_render_status",
+      "sentinel_self_status",
+    ],
   );
 
   const result = await client.callTool({ name: "sentinel_render_status", arguments: { history_limit: 10 } });
   assert.equal(result.isError, undefined);
   assert.equal(result.structuredContent.summary.total, 2);
   assert.equal(result.structuredContent.executions[0].errorMessage, "Falha simulada");
+});
+
+test("retorna saúde, fila de atenção, diagnóstico e métricas", async () => {
+  const selfStatus = await client.callTool({ name: "sentinel_self_status", arguments: {} });
+  assert.equal(selfStatus.structuredContent.api.database.connected, true);
+
+  const queue = await client.callTool({ name: "sentinel_get_attention_queue", arguments: {} });
+  assert.equal(queue.structuredContent.attentionQueue[0].jobId, "job_fail");
+
+  const diagnosis = await client.callTool({
+    name: "sentinel_diagnose_job",
+    arguments: { job_id: "job_fail", history_limit: 20 },
+  });
+  assert.equal(diagnosis.structuredContent.failures, 1);
+
+  const metrics = await client.callTool({ name: "sentinel_get_metrics", arguments: { days: 7 } });
+  assert.equal(metrics.structuredContent.metrics.totalExecutions, 2);
+  assert.equal(metrics.structuredContent.metrics.successRate, 50);
+});
+
+test("renderiza operações e persiste baseline proativo sem alerta falso", async () => {
+  const panel = await client.callTool({ name: "sentinel_render_operations", arguments: {} });
+  assert.equal(panel.structuredContent.attentionQueue.length, 2);
+  assert.equal(panel.structuredContent.attentionQueue[0].jobId, "job_fail");
+  assert.equal(panel.structuredContent.metrics.totalExecutions, 2);
+
+  const changes = await client.callTool({ name: "sentinel_check_changes", arguments: {} });
+  assert.equal(changes.structuredContent.isBaseline, true);
+  assert.equal(changes.structuredContent.changes.relevant, true);
+  assert.equal(changes.structuredContent.notified, false);
 });

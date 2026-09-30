@@ -482,6 +482,57 @@ def get_recent_executions(limit: int = 30, job_id: Optional[str] = None) -> List
             """, (limit,))
         return [dict(row) for row in cursor.fetchall()]
 
+
+def get_executions_between(
+    started_from: datetime,
+    started_to: datetime,
+    job_id: Optional[str] = None,
+    limit: int = 5000,
+) -> List[Dict[str, Any]]:
+    """Consulta execuções dentro de um período civil usando timestamps persistidos pelo Sentinel."""
+    safe_limit = max(1, min(int(limit), 10000))
+    clauses = ["COALESCE(started_at, created_at) >= ?", "COALESCE(started_at, created_at) < ?"]
+    parameters: List[Any] = [started_from.isoformat(), started_to.isoformat()]
+    if job_id:
+        clauses.append("job_id = ?")
+        parameters.append(job_id)
+    parameters.append(safe_limit)
+
+    with get_connection() as conn:
+        cursor = conn.execute(
+            f"""
+            SELECT * FROM job_executions
+            WHERE {' AND '.join(clauses)}
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            parameters,
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def get_database_health() -> Dict[str, Any]:
+    """Retorna uma verificação leve do SQLite sem expor credenciais ou caminhos locais."""
+    with get_connection() as conn:
+        conn.execute("SELECT 1").fetchone()
+        jobs_count = conn.execute("SELECT COUNT(*) AS total FROM jobs").fetchone()["total"]
+        executions_count = conn.execute("SELECT COUNT(*) AS total FROM job_executions").fetchone()["total"]
+        row = conn.execute("""
+            SELECT MAX(changed_at) AS last_updated_at
+            FROM (
+                SELECT MAX(updated_at) AS changed_at FROM jobs
+                UNION ALL
+                SELECT MAX(COALESCE(finished_at, started_at, created_at)) AS changed_at
+                FROM job_executions
+            )
+        """).fetchone()
+        return {
+            "connected": True,
+            "jobs_count": jobs_count,
+            "executions_count": executions_count,
+            "last_updated_at": row["last_updated_at"] if row else None,
+        }
+
 def delete_job(job_id: str) -> bool:
     """Remove um job e todo o seu histórico de execuções."""
     with get_connection() as conn:

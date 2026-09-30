@@ -1,7 +1,7 @@
 # 🛡️ Sentinel — Centralizador de Notificações e Monitoramento de Automações
 
 **Documentação Técnica, Arquitetura e Manual Operacional**  
-*Versão 1.5 - 29 de setembro de 2026*
+*Versão 1.6 - 30 de setembro de 2026*
 
 ---
 
@@ -261,7 +261,7 @@ Acesse no navegador:
 
 ### 6.3 MCP App para ChatGPT e Codex
 
-O diretório `mcp-app/` contém um servidor MCP separado que consulta as rotas REST do Sentinel. A versão 0.1 é somente leitura e não cadastra, edita, remove ou envia pings em nome das automações.
+O diretório `mcp-app/` contém um servidor MCP separado que consulta as rotas REST do Sentinel. A versão 0.2 continua somente leitura e não cadastra, edita, remove ou envia pings em nome das automações.
 
 ```powershell
 cd "C:\Automações\automation-sentinel\mcp-app"
@@ -271,11 +271,26 @@ npm.cmd start
 
 O atalho `run_mcp.bat` executa o mesmo servidor. Por padrão, o endpoint fica em `http://127.0.0.1:8787/mcp` e consulta `http://127.0.0.1:8050`. Os valores podem ser alterados no `.env` com `MCP_HOST`, `MCP_PORT` e `SENTINEL_API_URL`.
 
-O MCP App expõe três ferramentas:
+O MCP App expõe dez ferramentas:
 
 * `sentinel_list_jobs`: lista os jobs e resume quantos estão saudáveis, executando, com falha, ausentes ou aguardando;
 * `sentinel_get_executions`: retorna o histórico recente e os diagnósticos completos de falha;
 * `sentinel_render_status`: associa os dados atuais ao recurso visual `ui://sentinel/status/v1.html`.
+* `sentinel_self_status`: verifica versões, uptime, conexão com API/SQLite, última atualização e latência;
+* `sentinel_get_attention_queue`: aplica pontuação objetiva a falha, timeout, ausência, atraso e execução longa;
+* `sentinel_diagnose_job`: analisa falhas consecutivas, ausências e mensagens recorrentes normalizadas;
+* `sentinel_get_metrics`: calcula taxa de sucesso/ausência, duração média, p95 e violações;
+* `sentinel_compare_periods`: compara hoje com ontem ou os últimos 7 com os últimos 30 dias;
+* `sentinel_check_changes`: compara a fila atual com o último estado persistido sem emitir alerta;
+* `sentinel_render_operations`: renderiza fila de atenção, barras, linha do tempo, métricas e diagnósticos.
+
+#### Monitoramento proativo
+
+Defina `MCP_PROACTIVE_ENABLED=true` para consultar periodicamente a fila de atenção. A primeira leitura cria uma linha de base e não alerta. Leituras iguais permanecem silenciosas. Entradas, mudanças de severidade/status e resoluções geram um evento consolidado `sentinel.attention.changed`.
+
+Com `MCP_ALERT_WEBHOOK_URL`, o evento é enviado a um webhook HTTPS. `MCP_ALERT_WEBHOOK_SECRET` assina o corpo em `X-Sentinel-Signature` usando HMAC-SHA256. Sem webhook, a mudança é registrada no console e continua disponível pela ferramenta `sentinel_check_changes`.
+
+A entrega proativa diretamente em chats depende de MCP Events 2.0, armazenamento de assinaturas, verificação de callback e HTTPS público. Esta versão não apresenta polling local como se fosse uma assinatura nativa do ChatGPT.
 
 O componente usa a ponte padrão MCP Apps (`ui/initialize`, `ui/notifications/tool-result` e `tools/call`) e continua funcional como ferramenta estruturada em clientes que não renderizam UI. Para acesso remoto, publique somente por HTTPS e adicione autenticação e controle de acesso antes de expor dados operacionais.
 

@@ -80,11 +80,22 @@ npm.cmd start
 
 No Windows, também é possível usar `run_mcp.bat`. O endpoint local será `http://127.0.0.1:8787/mcp`.
 
-Ferramentas expostas:
+Ferramentas expostas na versão 0.2:
 
 * `sentinel_list_jobs` — lista automações, estados atuais e resumo operacional;
 * `sentinel_get_executions` — consulta histórico, mensagens de erro e traceback;
-* `sentinel_render_status` — exibe um painel MCP App responsivo com status e execuções recentes.
+* `sentinel_self_status` — informa versões, uptime, banco, última atualização e latência;
+* `sentinel_get_attention_queue` — retorna somente jobs que exigem atenção, por criticidade;
+* `sentinel_diagnose_job` — identifica falhas consecutivas, atrasos, timeouts e erros recorrentes;
+* `sentinel_get_metrics` — calcula sucesso, ausência, média, p95 e violações de tempo;
+* `sentinel_compare_periods` — compara hoje × ontem ou 7 × 30 dias;
+* `sentinel_check_changes` — compara a fila atual com o último estado persistido;
+* `sentinel_render_status` — exibe o painel compacto original;
+* `sentinel_render_operations` — exibe fila, barras, métricas, linha do tempo e erros.
+
+O monitor proativo é ativado com `MCP_PROACTIVE_ENABLED=true`. Ele consulta a API no intervalo configurado, grava somente a fotografia operacional em `mcp-app/data/attention-state.json` e não emite nada quando o estado permanece igual. Se `MCP_ALERT_WEBHOOK_URL` estiver configurada, envia `sentinel.attention.changed` apenas quando um job entra, muda ou sai da fila; `MCP_ALERT_WEBHOOK_SECRET` adiciona assinatura HMAC-SHA256.
+
+> O webhook é a integração proativa desta versão local. A entrega nativa de eventos em chats exige MCP Events, protocolo 2.0, armazenamento de assinaturas e callbacks HTTPS; ela não é simulada por polling do ChatGPT.
 
 As variáveis opcionais `SENTINEL_API_URL`, `MCP_HOST` e `MCP_PORT` ficam no `.env`. Para conectar um host remoto, publique o endpoint com HTTPS e informe a URL completa terminada em `/mcp`. Não exponha o serviço publicamente sem autenticação e controle de acesso.
 

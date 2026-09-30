@@ -1,9 +1,9 @@
 {
   "name": "sentinel-mcp-app",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "MCP App somente leitura para consultar e visualizar o Automation Sentinel.",
+  "description": "MCP App de operações, diagnóstico, métricas e monitoramento do Automation Sentinel.",
   "scripts": {
     "start": "node --env-file-if-exists=../.env server.mjs",
     "check": "node --check server.mjs",

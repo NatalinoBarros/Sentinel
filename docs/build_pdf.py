@@ -108,7 +108,7 @@ def generate_pdf():
 
     # Cabeçalho
     story.append(Paragraph("SENTINEL - MONITOR DE AUTOMAÇÕES", title_style))
-    story.append(Paragraph("Documentação Técnica, Arquitetura e Manual Operacional - v1.5", subtitle_style))
+    story.append(Paragraph("Documentação Técnica, Arquitetura e Manual Operacional - v1.6", subtitle_style))
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#4F46E5"), spaceAfter=12))
 
     # 1. Visão Geral
@@ -253,22 +253,15 @@ def generate_pdf():
     story.append(Paragraph("- <b>Telegram:</b> Crie o bot no <b>@BotFather</b> (<code>/newbot</code>), capture seu Chat ID com <b>@userinfobot</b> e configure no arquivo <code>.env</code>.", bullet_style))
     story.append(Paragraph("5.1 MCP App para ChatGPT e Codex", h2_style))
     story.append(Paragraph(
-        "O diretório <code>mcp-app/</code> fornece um servidor MCP somente leitura. Ele consulta a API REST do Sentinel e expõe as ferramentas "
-        "<code>sentinel_list_jobs</code>, <code>sentinel_get_executions</code> e <code>sentinel_render_status</code>. A última ferramenta entrega um painel visual "
-        "compatível com o padrão MCP Apps; nenhuma delas cadastra, edita, remove ou envia pings.",
+        "O <code>mcp-app/</code> 0.2 é somente leitura e oferece saúde, fila de atenção, diagnóstico, métricas, comparações e painéis operacionais; "
+        "não cadastra, edita, remove nem envia pings. Inicie com <code>npm.cmd start</code> ou <code>run_mcp.bat</code> e use "
+        "<u>http://127.0.0.1:8787/mcp</u>.",
         body_style
     ))
     story.append(Paragraph(
-        "- <b>Inicialização:</b> Execute <code>npm.cmd install</code> e <code>npm.cmd start</code> dentro de <code>mcp-app</code>, ou use <code>run_mcp.bat</code>.",
-        bullet_style
-    ))
-    story.append(Paragraph(
-        "- <b>Endpoint:</b> <u>http://127.0.0.1:8787/mcp</u>. Ajuste <code>SENTINEL_API_URL</code>, <code>MCP_HOST</code> e <code>MCP_PORT</code> no <code>.env</code>.",
-        bullet_style
-    ))
-    story.append(Paragraph(
-        "- <b>Segurança:</b> Para acesso remoto, publique por HTTPS e adicione autenticação antes de expor dados operacionais.",
-        bullet_style
+        "O modo proativo (<code>MCP_PROACTIVE_ENABLED=true</code>) cria uma linha de base silenciosa e envia somente mudanças a "
+        "<code>MCP_ALERT_WEBHOOK_URL</code>, com HMAC opcional. Acesso remoto e MCP Events 2.0 exigem HTTPS, autenticação e assinaturas persistentes.",
+        body_style
     ))
 
     # 6. Automações Ativas

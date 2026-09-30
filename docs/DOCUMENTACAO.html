@@ -195,7 +195,7 @@
 
   <div class="container">
     <div class="header">
-      <span class="badge">Documentação Oficial v1.5</span>
+      <span class="badge">Documentação Oficial v1.6</span>
       <h1>Sentinel — Monitor de Automações</h1>
       <p class="subtitle">Centralizador de Heartbeats, Detecção de Ausências (Dead Man's Switch) e Notificações de Erros</p>
     </div>
@@ -330,11 +330,12 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8050 --reload</code></pre
     </div>
 
     <h3>MCP App para ChatGPT e Codex</h3>
-    <p>O diretório <code>mcp-app/</code> contém um servidor MCP somente leitura que consulta a API REST do Sentinel. Ele expõe <code>sentinel_list_jobs</code>, <code>sentinel_get_executions</code> e <code>sentinel_render_status</code>, sem cadastrar, editar, remover ou enviar pings.</p>
+    <p>O diretório <code>mcp-app/</code> contém um servidor MCP somente leitura que consulta a API REST do Sentinel. A versão 0.2 adiciona saúde interna, fila de atenção, diagnóstico, métricas, comparação de períodos, detecção de mudanças e o painel <code>sentinel_render_operations</code>, sem cadastrar, editar, remover ou enviar pings.</p>
     <pre><code>cd "C:\Automações\automation-sentinel\mcp-app"
 npm.cmd install
 npm.cmd start</code></pre>
     <p>O endpoint padrão é <code>http://127.0.0.1:8787/mcp</code>. Configure <code>SENTINEL_API_URL</code>, <code>MCP_HOST</code> e <code>MCP_PORT</code> no <code>.env</code>. Para acesso remoto, use HTTPS e implemente autenticação antes de expor dados operacionais.</p>
+    <p>O monitor proativo usa <code>MCP_PROACTIVE_ENABLED=true</code>, cria uma linha de base silenciosa e só emite <code>sentinel.attention.changed</code> quando um job entra, muda ou sai da fila. O webhook opcional usa <code>MCP_ALERT_WEBHOOK_URL</code> e pode ser assinado com <code>MCP_ALERT_WEBHOOK_SECRET</code>. Eventos nativos em chats exigem MCP Events 2.0 e callbacks HTTPS.</p>
 
     <h2>6. Integração nas Automações</h2>
     <p>Certifique-se de que o arquivo <code>monitor.py</code> esteja na pasta da automação e adicione o decorador na função principal:</p>

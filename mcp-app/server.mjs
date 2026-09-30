@@ -12,12 +12,24 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 
+import {
+  buildAttentionQueue,
+  calculateMetrics,
+  compareMetrics,
+  diagnoseJob,
+} from "./analytics.mjs";
+import { createProactiveMonitor } from "./proactive-monitor.mjs";
+
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 const WIDGET_URI = "ui://sentinel/status/v1.html";
+const OPERATIONS_WIDGET_URI = "ui://sentinel/operations/v1.html";
 const MCP_PATH = "/mcp";
 const DEFAULT_API_URL = "http://127.0.0.1:8050";
 const DEFAULT_TIMEOUT_MS = 8_000;
+const MCP_VERSION = "0.2.0";
+const MCP_STARTED_AT = new Date();
 const widgetHtml = readFileSync(resolve(MODULE_DIR, "public", "sentinel-widget.html"), "utf8");
+const operationsWidgetHtml = readFileSync(resolve(MODULE_DIR, "public", "operations-widget.html"), "utf8");
 
 const statusValues = ["PENDING", "RUNNING", "SUCCESS", "FAILED", "MISSED", "TIMEOUT"];
 
@@ -54,6 +66,33 @@ const summarySchema = z.object({
   failed: z.number(),
   missed: z.number(),
   pending: z.number(),
+});
+
+const attentionItemSchema = z.object({
+  jobId: z.string(),
+  name: z.string(),
+  status: z.string(),
+  severity: z.string(),
+  score: z.number(),
+  reason: z.string(),
+  since: z.string().nullable(),
+  nextExpectedAt: z.string().nullable(),
+});
+
+const metricsSchema = z.object({
+  period: z.object({ from: z.string(), to: z.string(), label: z.string().optional() }),
+  totalExecutions: z.number(),
+  successCount: z.number(),
+  failureCount: z.number(),
+  missedCount: z.number(),
+  timeoutCount: z.number(),
+  runningCount: z.number(),
+  successRate: z.number(),
+  absenceRate: z.number(),
+  averageDurationSeconds: z.number().nullable(),
+  p95DurationSeconds: z.number().nullable(),
+  durationViolations: z.number(),
+  statusCounts: z.record(z.number()),
 });
 
 function asNullableString(value) {
@@ -144,6 +183,79 @@ export async function fetchExecutions(apiUrl, { jobId, limit = 20 } = {}, fetchI
   return (await fetchJson(apiUrl, `/api/executions?${params}`, fetchImpl)).map(normalizeExecution);
 }
 
+export async function fetchExecutionsPeriod(
+  apiUrl,
+  { from, to, jobId, limit = 5000 } = {},
+  fetchImpl = fetch,
+) {
+  const params = new URLSearchParams({
+    started_from: from,
+    started_to: to,
+    limit: String(Math.max(1, Math.min(Number(limit) || 5000, 10000))),
+  });
+  if (jobId) params.set("job_id", jobId);
+  return (await fetchJson(apiUrl, `/api/executions/period?${params}`, fetchImpl)).map(normalizeExecution);
+}
+
+export async function fetchHealth(apiUrl, fetchImpl = fetch) {
+  const startedAt = performance.now();
+  const health = await fetchJson(apiUrl, "/api/health", fetchImpl);
+  return { ...health, roundTripLatencyMs: Math.round((performance.now() - startedAt) * 100) / 100 };
+}
+
+function startOfDay(value = new Date()) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function toLocalIso(date) {
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().replace("Z", "");
+}
+
+export function resolvePeriod({ from, to, days = 7, now = new Date() } = {}) {
+  const end = to ? new Date(to) : new Date(now);
+  const start = from ? new Date(from) : new Date(end.getTime() - Math.max(1, days) * 86_400_000);
+  if (Number.isNaN(start.valueOf()) || Number.isNaN(end.valueOf()) || start >= end) {
+    throw new Error("Período inválido: 'from' deve ser anterior a 'to'.");
+  }
+  return { from: toLocalIso(start), to: toLocalIso(end) };
+}
+
+function comparisonPeriods(kind, now = new Date()) {
+  const today = startOfDay(now);
+  if (kind === "today_vs_yesterday") {
+    const yesterday = new Date(today.getTime() - 86_400_000);
+    return {
+      current: { label: "hoje", from: toLocalIso(today), to: toLocalIso(now) },
+      previous: { label: "ontem", from: toLocalIso(yesterday), to: toLocalIso(today) },
+    };
+  }
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
+  return {
+    current: { label: "últimos 7 dias", from: toLocalIso(sevenDaysAgo), to: toLocalIso(now) },
+    previous: { label: "últimos 30 dias", from: toLocalIso(thirtyDaysAgo), to: toLocalIso(now) },
+  };
+}
+
+export async function fetchOperationsSnapshot(apiUrl, fetchImpl = fetch) {
+  const period = resolvePeriod({ days: 7 });
+  const [jobs, executions] = await Promise.all([
+    fetchJobs(apiUrl, {}, fetchImpl),
+    fetchExecutionsPeriod(apiUrl, { ...period, limit: 5000 }, fetchImpl),
+  ]);
+  return {
+    generatedAt: new Date().toISOString(),
+    summary: summarizeJobs(jobs),
+    attentionQueue: buildAttentionQueue(jobs),
+    metrics: calculateMetrics(jobs, executions, { ...period, label: "últimos 7 dias" }),
+    jobs,
+    executions: executions.slice(0, 100),
+  };
+}
+
 export async function fetchSnapshot(apiUrl, { jobIds, historyLimit = 20 } = {}, fetchImpl = fetch) {
   const [allJobs, allExecutions] = await Promise.all([
     fetchJobs(apiUrl, {}, fetchImpl),
@@ -176,12 +288,16 @@ function errorResult(error) {
   };
 }
 
-export function createSentinelMcpServer({ apiUrl = DEFAULT_API_URL, fetchImpl = fetch } = {}) {
+export function createSentinelMcpServer({
+  apiUrl = DEFAULT_API_URL,
+  fetchImpl = fetch,
+  proactiveMonitor = null,
+} = {}) {
   const server = new McpServer(
-    { name: "automation-sentinel", version: "0.1.0" },
+    { name: "automation-sentinel", version: MCP_VERSION },
     {
       instructions:
-        "Use as ferramentas de leitura para consultar a saúde das automações. Antes de afirmar que uma rotina está saudável ou com falha, consulte os dados atuais. Use sentinel_render_status quando uma visualização ajudar.",
+        "Consulte dados atuais antes de afirmar a saúde de uma automação. Priorize sentinel_get_attention_queue para triagem, sentinel_diagnose_job para causa e sentinel_get_metrics para tendências. Use sentinel_render_operations quando uma visualização ajudar.",
     },
   );
 
@@ -195,6 +311,50 @@ export function createSentinelMcpServer({ apiUrl = DEFAULT_API_URL, fetchImpl = 
       },
     ],
   }));
+
+  registerAppResource(server, "sentinel-operations-widget", OPERATIONS_WIDGET_URI, {}, async () => ({
+    contents: [
+      {
+        uri: OPERATIONS_WIDGET_URI,
+        mimeType: RESOURCE_MIME_TYPE,
+        text: operationsWidgetHtml,
+        _meta: { ui: { prefersBorder: true } },
+      },
+    ],
+  }));
+
+  registerAppTool(
+    server,
+    "sentinel_self_status",
+    {
+      title: "Verificar saúde do Sentinel",
+      description: "Informa versões, uptime, conexão com API e banco, última atualização e latência.",
+      inputSchema: {},
+      _meta: {},
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async () => {
+      try {
+        const api = await fetchHealth(apiUrl, fetchImpl);
+        const value = {
+          mcp: {
+            version: MCP_VERSION,
+            startedAt: MCP_STARTED_AT.toISOString(),
+            uptimeSeconds: Math.max(0, Math.floor((Date.now() - MCP_STARTED_AT.getTime()) / 1000)),
+          },
+          api,
+          proactiveMonitoring: proactiveMonitor?.status?.() ?? { enabled: false },
+          checkedAt: new Date().toISOString(),
+        };
+        return textResult(
+          `Sentinel ${api.version}; API ${api.database?.connected ? "e banco conectados" : "com indisponibilidade"}; latência ${api.roundTripLatencyMs} ms.`,
+          value,
+        );
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
 
   registerAppTool(
     server,
@@ -252,6 +412,187 @@ export function createSentinelMcpServer({ apiUrl = DEFAULT_API_URL, fetchImpl = 
 
   registerAppTool(
     server,
+    "sentinel_get_attention_queue",
+    {
+      title: "Listar fila de atenção do Sentinel",
+      description: "Lista somente automações que exigem atenção, ordenadas por criticidade objetiva.",
+      inputSchema: {},
+      outputSchema: { generatedAt: z.string(), attentionQueue: z.array(attentionItemSchema) },
+      _meta: {},
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async () => {
+      try {
+        const jobs = await fetchJobs(apiUrl, {}, fetchImpl);
+        const attentionQueue = buildAttentionQueue(jobs);
+        return textResult(
+          attentionQueue.length
+            ? `${attentionQueue.length} automação(ões) exigem atenção.`
+            : "Nenhuma automação exige atenção neste momento.",
+          { generatedAt: new Date().toISOString(), attentionQueue },
+        );
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "sentinel_diagnose_job",
+    {
+      title: "Diagnosticar automação do Sentinel",
+      description: "Analisa falhas consecutivas, ausências, timeouts e padrões recorrentes de erro de um job.",
+      inputSchema: {
+        job_id: z.string().min(1),
+        history_limit: z.number().int().min(5).max(100).default(30),
+      },
+      _meta: {},
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ job_id: jobId, history_limit: historyLimit }) => {
+      try {
+        const [jobs, executions] = await Promise.all([
+          fetchJobs(apiUrl, {}, fetchImpl),
+          fetchExecutions(apiUrl, { jobId, limit: historyLimit }, fetchImpl),
+        ]);
+        const job = jobs.find((candidate) => candidate.jobId === jobId);
+        if (!job) return errorResult(new Error(`Automação '${jobId}' não encontrada.`));
+        const diagnosis = diagnoseJob(job, executions);
+        return textResult(
+          `Diagnóstico de ${job.name}: severidade ${diagnosis.severity}, ${diagnosis.findings.join(" ")}`,
+          diagnosis,
+        );
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "sentinel_get_metrics",
+    {
+      title: "Calcular métricas do Sentinel",
+      description: "Calcula sucesso, ausência, duração média, p95 e violações de tempo em um período.",
+      inputSchema: {
+        job_id: z.string().min(1).optional(),
+        from: z.string().optional().describe("Data/hora ISO inclusiva."),
+        to: z.string().optional().describe("Data/hora ISO exclusiva."),
+        days: z.number().int().min(1).max(365).default(7),
+      },
+      outputSchema: { metrics: metricsSchema },
+      _meta: {},
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ job_id: jobId, from, to, days } = {}) => {
+      try {
+        const period = { ...resolvePeriod({ from, to, days }), label: from || to ? "período informado" : `últimos ${days ?? 7} dias` };
+        const [jobs, executions] = await Promise.all([
+          fetchJobs(apiUrl, {}, fetchImpl),
+          fetchExecutionsPeriod(apiUrl, { ...period, jobId }, fetchImpl),
+        ]);
+        const selectedJobs = jobId ? jobs.filter((job) => job.jobId === jobId) : jobs;
+        const metrics = calculateMetrics(selectedJobs, executions, period);
+        return textResult(
+          `${metrics.totalExecutions} execuções; sucesso ${metrics.successRate}%; ausência ${metrics.absenceRate}%; p95 ${metrics.p95DurationSeconds ?? "sem dados"}s.`,
+          { metrics },
+        );
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "sentinel_compare_periods",
+    {
+      title: "Comparar períodos do Sentinel",
+      description: "Compara hoje com ontem ou os últimos 7 dias com os últimos 30 dias.",
+      inputSchema: {
+        comparison: z.enum(["today_vs_yesterday", "last_7_vs_last_30"]).default("today_vs_yesterday"),
+        job_id: z.string().min(1).optional(),
+      },
+      _meta: {},
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ comparison, job_id: jobId } = {}) => {
+      try {
+        const periods = comparisonPeriods(comparison ?? "today_vs_yesterday");
+        const jobs = await fetchJobs(apiUrl, {}, fetchImpl);
+        const selectedJobs = jobId ? jobs.filter((job) => job.jobId === jobId) : jobs;
+        const [currentExecutions, previousExecutions] = await Promise.all([
+          fetchExecutionsPeriod(apiUrl, { ...periods.current, jobId }, fetchImpl),
+          fetchExecutionsPeriod(apiUrl, { ...periods.previous, jobId }, fetchImpl),
+        ]);
+        const result = compareMetrics(
+          calculateMetrics(selectedJobs, currentExecutions, periods.current),
+          calculateMetrics(selectedJobs, previousExecutions, periods.previous),
+        );
+        return textResult(
+          `Comparação concluída: ${periods.current.label} versus ${periods.previous.label}.`,
+          { comparison: comparison ?? "today_vs_yesterday", ...result },
+        );
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "sentinel_check_changes",
+    {
+      title: "Verificar mudanças relevantes no Sentinel",
+      description: "Compara a fila de atenção atual com o estado persistido e informa apenas entradas, alterações ou resoluções.",
+      inputSchema: {},
+      _meta: {},
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async () => {
+      try {
+        if (!proactiveMonitor) return errorResult(new Error("Monitor proativo não inicializado."));
+        const result = await proactiveMonitor.check({ notify: false });
+        return textResult(
+          result.isBaseline
+            ? "Linha de base do monitoramento proativo criada sem emitir alerta."
+            : result.changes?.relevant
+            ? `Mudança relevante: +${result.changes.added.length}, ~${result.changes.changed.length}, -${result.changes.resolved.length}.`
+            : "Nenhuma mudança relevante desde a última verificação.",
+          result,
+        );
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "sentinel_render_operations",
+    {
+      title: "Exibir operações do Sentinel",
+      description: "Renderiza painel operacional com fila de atenção, barras, linha do tempo, métricas e erros.",
+      inputSchema: {},
+      _meta: { ui: { resourceUri: OPERATIONS_WIDGET_URI } },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async () => {
+      try {
+        const snapshot = await fetchOperationsSnapshot(apiUrl, fetchImpl);
+        return textResult(
+          `Painel operacional: ${snapshot.attentionQueue.length} item(ns) de atenção e ${snapshot.metrics.totalExecutions} execuções em 7 dias.`,
+          snapshot,
+        );
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
     "sentinel_render_status",
     {
       title: "Exibir painel do Sentinel",
@@ -290,7 +631,22 @@ export async function startMcpHttpServer({
   host = process.env.MCP_HOST || "127.0.0.1",
   port = Number(process.env.MCP_PORT || 8787),
   fetchImpl = fetch,
+  proactiveEnabled = String(process.env.MCP_PROACTIVE_ENABLED || "false").toLowerCase() === "true",
+  proactiveIntervalSeconds = Number(process.env.MCP_PROACTIVE_INTERVAL_SECONDS || 60),
+  proactiveStatePath = process.env.MCP_PROACTIVE_STATE_PATH || resolve(MODULE_DIR, "data", "attention-state.json"),
+  webhookUrl = process.env.MCP_ALERT_WEBHOOK_URL || "",
+  webhookSecret = process.env.MCP_ALERT_WEBHOOK_SECRET || "",
 } = {}) {
+  const proactiveMonitor = createProactiveMonitor({
+    fetchJobs: () => fetchJobs(apiUrl, {}, fetchImpl),
+    statePath: proactiveStatePath,
+    intervalSeconds: proactiveIntervalSeconds,
+    webhookUrl,
+    webhookSecret,
+    fetchImpl,
+  });
+  if (proactiveEnabled) proactiveMonitor.start();
+
   const httpServer = createHttpServer(async (req, res) => {
     if (!req.url) {
       res.writeHead(400).end("Missing URL");
@@ -302,7 +658,7 @@ export async function startMcpHttpServer({
       res.writeHead(204, {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, GET, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "content-type, mcp-session-id",
+        "Access-Control-Allow-Headers": "content-type, mcp-session-id, mcp-protocol-version",
         "Access-Control-Expose-Headers": "Mcp-Session-Id",
       });
       res.end();
@@ -311,7 +667,12 @@ export async function startMcpHttpServer({
 
     if (req.method === "GET" && url.pathname === "/") {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ service: "automation-sentinel-mcp", mcp: MCP_PATH }));
+      res.end(JSON.stringify({
+        service: "automation-sentinel-mcp",
+        version: MCP_VERSION,
+        mcp: MCP_PATH,
+        proactiveMonitoring: proactiveMonitor.status(),
+      }));
       return;
     }
 
@@ -319,7 +680,7 @@ export async function startMcpHttpServer({
     if (url.pathname === MCP_PATH && req.method && mcpMethods.has(req.method)) {
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id");
-      const mcpServer = createSentinelMcpServer({ apiUrl, fetchImpl });
+      const mcpServer = createSentinelMcpServer({ apiUrl, fetchImpl, proactiveMonitor });
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,
@@ -347,6 +708,8 @@ export async function startMcpHttpServer({
     httpServer.once("error", rejectListen);
     httpServer.listen(port, host, resolveListen);
   });
+  httpServer.once("close", () => proactiveMonitor.stop());
+  httpServer.proactiveMonitor = proactiveMonitor;
   return httpServer;
 }
 
@@ -360,4 +723,5 @@ if (invokedDirectly) {
   const port = typeof address === "object" && address ? address.port : process.env.MCP_PORT || 8787;
   console.log(`Sentinel MCP App em http://${host}:${port}${MCP_PATH}`);
   console.log(`API Sentinel: ${normalizeApiUrl(process.env.SENTINEL_API_URL || DEFAULT_API_URL)}`);
+  console.log(`Monitor proativo: ${server.proactiveMonitor.status().enabled ? "ativo" : "desativado"}`);
 }
